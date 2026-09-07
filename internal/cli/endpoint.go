@@ -6,10 +6,19 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
 func huddlEndpoint() (*url.URL, error) {
+	server, err := serverURL()
+	if err != nil {
+		return nil, err
+	}
+	return server.JoinPath("api/json/huddlz"), nil
+}
+
+func serverURL() (*url.URL, error) {
 	base := os.Getenv("HUDDLZ_URL")
 	if base == "" {
 		base = "https://huddlz.com"
@@ -21,7 +30,8 @@ func huddlEndpoint() (*url.URL, error) {
 	if endpoint.Path == "" {
 		endpoint.Path = "/"
 	}
-	return endpoint.JoinPath("api/json/huddlz"), nil
+	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/"
+	return endpoint, nil
 }
 
 // getJSONAPI applies the shared transport policy for public reads.

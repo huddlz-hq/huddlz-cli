@@ -129,8 +129,6 @@ Planned additions (not implemented):
 | Address lookup and profile defaults | Choose search locations without coordinates |
 | `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |
-| `huddlz auth login` | Authenticate |
-| `huddlz auth status` | Check the current identity |
 | `huddlz auth logout` | End the local session and handle server revocation |
 
 Command conventions:
@@ -140,8 +138,8 @@ Command conventions:
 - Exit code 0 for success, 1 for execution failure, and 2 for invalid usage.
 - All commands must work without interactive prompts when inputs are supplied.
 - Anonymous discovery must work without login.
-- Support an environment-supplied API key for agents. Do not accept passwords
-  through command-line arguments or print credentials.
+- Do not accept passwords through command-line arguments or print credentials.
+  Environment-supplied API keys remain planned; password stdin is available to every caller.
 - Keep pagination explicit so agents can bound requests and output.
 
 ## Existing API
@@ -163,9 +161,9 @@ exist in that checkout; deployment availability still needs verification.
 Search uses JSON:API sorting such as `sort=starts_at` or `sort=-inserted_at`.
 The backend advertises its schema at `/api/json/open_api`.
 
-Before implementing authentication, decide the human login flow and credential
-storage. The inspected backend supports password sign-in and API keys; a browser
-or device-code flow would require checking for or adding backend support.
+The initial login uses password sign-in and saves a session token in a private
+local file. The backend also supports API keys; a browser or device-code flow
+would require checking for or adding backend support.
 JWT sign-out and API-key revocation are separate operations. Current API keys
 have full user permissions, so scoped agent keys are a backend follow-up.
 
@@ -224,3 +222,32 @@ The document contains:
 Strings retain their original values in JSON; table formatting does not alter
 structured data. This initial JSON convention covers search; `show` remains
 readable output for now.
+
+### Authenticate
+
+```sh
+huddlz auth login --email you@example.com
+huddlz auth status
+```
+
+Login reads a hidden password from the terminal. For noninteractive use, add
+`--password-stdin` and pipe the password from your secret manager. A trailing
+line ending is removed; other password characters are preserved. The CLI never
+accepts a password argument and never stores the password.
+
+Login verifies the returned token with `/api/auth/me` before saving it. Status
+also calls that endpoint, so it reports the current server-verified account,
+including ID, email, and display name. Tokens are never printed.
+
+Sessions are scoped to the full `HUDDLZ_URL` server and base path. Tokens are
+stored unencrypted in mode-0600 files beneath the OS user configuration directory
+(`~/Library/Application Support/huddlz/sessions` on macOS,
+`$XDG_CONFIG_HOME/huddlz/sessions` or `~/.config/huddlz/sessions` on Linux).
+The file name is a hash of the server URL. New session directories use mode 0700;
+saves replace the token atomically. The OS keychain is not used in this version.
+Authentication requires HTTPS except for loopback development servers and does
+not follow redirects. Search and show continue to use anonymous public reads;
+using authenticated sessions for attendance actions is the next increment.
+
+Logout/revocation is tracked separately in #16. For now, removing a saved token
+file removes local access but does not revoke the token on the server.

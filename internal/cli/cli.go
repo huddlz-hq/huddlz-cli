@@ -10,6 +10,8 @@ import (
 const help = `huddlz — a CLI for humans and agents
 
 Usage:
+  huddlz auth login --email <email> [--password-stdin]
+  huddlz auth status
   huddlz show <id>
   huddlz help
   huddlz version [--json]
@@ -22,7 +24,7 @@ Options:
 Search shows one page as a table, defaulting to 20 upcoming huddlz.
 Run 'huddlz search --help' for supported filters and options.
 Set HUDDLZ_URL to override the default server, https://huddlz.com.
-RSVP and login are planned.
+RSVP is planned.
 `
 
 // Run executes a command. Exit codes are 0 for success, 1 for execution
@@ -30,6 +32,8 @@ RSVP and login are planned.
 func Run(args []string, stdout, stderr io.Writer, version string) int {
 	var err error
 	switch {
+	case len(args) > 0 && args[0] == "auth":
+		return auth(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "show":
 		return show(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "search":
