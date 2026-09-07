@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -40,8 +41,11 @@ func search(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "HUDDLZ_URL must be an HTTP(S) server URL without credentials, query, or fragment.")
 		return 2
 	}
+	if endpoint.Path == "" {
+		endpoint.Path = "/"
+	}
 	endpoint = endpoint.JoinPath("api/json/huddlz")
-	params := url.Values{"date_filter": {options.date}, "search_time_zone": {options.timeZone}, "sort": {"starts_at"}, "page[limit]": {"20"}}
+	params := url.Values{"date_filter": {options.date}, "search_time_zone": {options.timeZone}, "sort": {"starts_at"}, "page[limit]": {strconv.Itoa(options.limit)}, "page[offset]": {strconv.Itoa(options.offset)}}
 	if options.query != "" {
 		params.Set("query", options.query)
 	}
@@ -67,6 +71,9 @@ func search(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	var document struct {
+		Links struct {
+			Next json.RawMessage `json:"next"`
+		} `json:"links"`
 		Data *[]struct {
 			ID         string `json:"id"`
 			Type       string `json:"type"`
@@ -90,12 +97,21 @@ func search(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
+	if len(*document.Data) > options.limit {
+		fmt.Fprintln(stderr, "Search failed: API returned more results than requested.")
+		return 1
+	}
+	pageMessage, err := nextPageMessage(document.Links.Next, options, endpoint)
+	if err != nil {
+		fmt.Fprintln(stderr, "Search failed:", err)
+		return 1
+	}
 	var output strings.Builder
 	kind := options.kind
 	if kind == "" {
 		kind = "all types"
 	}
-	fmt.Fprintf(&output, "Searching everywhere · %s · %s · calendar timezone: %s · up to 20 results\n", options.date, kind, options.timeZone)
+	fmt.Fprintf(&output, "Searching everywhere · %s · %s · calendar timezone: %s · up to %d results · offset %d\n", options.date, kind, options.timeZone, options.limit, options.offset)
 	fmt.Fprintln(&output)
 	if len(*document.Data) == 0 {
 		fmt.Fprintln(&output, "No matching huddlz.")
@@ -107,6 +123,8 @@ func search(args []string, stdout, stderr io.Writer) int {
 		}
 		table.Flush()
 	}
+	fmt.Fprintln(&output)
+	fmt.Fprintln(&output, pageMessage)
 	if _, err := io.WriteString(stdout, output.String()); err != nil {
 		fmt.Fprintln(stderr, "Could not write output:", err)
 		return 1

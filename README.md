@@ -9,10 +9,11 @@ and profile preferences are not implemented yet.
 huddlz search
 huddlz search --anywhere "board games"
 huddlz search "board games" --date this_week --type in_person --time-zone America/New_York
+huddlz search "board games" --limit 10 --offset 10
 ```
 
-Search requests the first 20 matches, ordered by start time ascending, and prints
-a table. It defaults to upcoming huddlz and uses `https://huddlz.com`; set
+Search requests one page of up to 20 matches by default, ordered by start time
+ascending, and prints a table. It defaults to upcoming huddlz and uses `https://huddlz.com`; set
 `HUDDLZ_URL` to use another server.
 Omit the query to browse. Anonymous search is unrestricted geographically and
 prints that scope explicitly. Options may appear before or after the quoted
@@ -23,6 +24,8 @@ query. `--anywhere` also explicitly selects that geographic scope.
 | `--date` | `upcoming`, `this_week`, `this_month`, `past`, `all` | `upcoming` |
 | `--type` | `in_person`, `virtual`, `hybrid` | All types when omitted |
 | `--time-zone` | Canonical IANA name, such as `America/New_York` or `Etc/UTC` | `Etc/UTC` |
+| `--limit` | Integer from 1 through 100 | `20` |
+| `--offset` | Nonnegative integer | `0` |
 
 The chosen calendar timezone is sent to the server and shown in the search
 scope. `UTC` is accepted as shorthand for `Etc/UTC`. The API determines calendar
@@ -31,7 +34,19 @@ page locally. Result timestamps retain the offsets supplied by the API. Invalid
 date/type values and noncanonical timezones fail before a request is sent.
 Aliases such as `US/Eastern` are rejected; use `America/New_York` instead.
 
-Search JSON output, geographic filters, and subsequent pages remain planned.
+When the API reports another page, output includes a `Next page:` command with
+the current query, filters, and page size preserved. Copy it into a POSIX shell
+(such as bash or zsh) while retaining the same `HUDDLZ_URL` environment setting.
+Each invocation fetches just one page. You can also repeat the search with an
+explicit `--offset`; it counts results to skip, not page numbers.
+
+An explicit null next-page link produces `No more results.` Missing pagination
+metadata produces `Pagination information unavailable.`; the CLI does not guess
+from the number of results. Invalid continuation links and responses exceeding
+the requested limit fail without printing successful results. Offset pagination
+is not a snapshot: changes to matching huddlz between requests can move results.
+
+Search JSON output and geographic filters remain planned.
 
 ## Development
 
@@ -56,6 +71,10 @@ Run the executable search scenarios with:
 ```sh
 go test ./features -run TestFeatures -v -count=1
 ```
+
+`features/pagination.feature` follows the printed next-page command through a
+POSIX shell and checks that filters and literal query text survive. It also
+covers page bounds and end-of-results states.
 
 `features/search.feature` covers anonymous browsing, search by interest, combined
 date/type filters, invalid inputs, no matches, and API failures. Godog builds and runs the actual CLI against an
@@ -93,7 +112,7 @@ Planned additions (not implemented):
 
 | Command | Purpose |
 | --- | --- |
-| Search filters and pagination | Refine discovery and fetch subsequent pages |
+| Geographic search filters | Refine discovery around a chosen location |
 | `huddlz show <id>` | Look up a single huddl |
 | `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |

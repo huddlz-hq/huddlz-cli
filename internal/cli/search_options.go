@@ -19,6 +19,8 @@ Options:
   --date <filter>     upcoming (default), this_week, this_month, past, all
   --type <type>       in_person, virtual, hybrid (omitted: all types)
   --time-zone <zone>  Canonical IANA calendar timezone (default: Etc/UTC)
+  --limit <number>    Maximum results per request, 1–100 (default: 20)
+  --offset <number>   Skip this many matching results (default: 0)
   -h, --help          Show search help
 
 Options may appear before or after the quoted query.
@@ -28,6 +30,7 @@ Result timestamps retain the offsets returned by the server.
 
 type searchOptions struct {
 	query, date, kind, timeZone string
+	limit, offset               int
 }
 
 func parseSearchOptions(args []string) (searchOptions, error) {
@@ -38,6 +41,8 @@ func parseSearchOptions(args []string) (searchOptions, error) {
 	flags.StringVar(&options.date, "date", "upcoming", "Date filter")
 	flags.StringVar(&options.kind, "type", "", "Huddl type")
 	flags.StringVar(&options.timeZone, "time-zone", "Etc/UTC", "Calendar timezone")
+	flags.IntVar(&options.limit, "limit", 20, "Results per page")
+	flags.IntVar(&options.offset, "offset", 0, "Result offset")
 	if err := flags.Parse(args); err != nil {
 		return options, err
 	}
@@ -45,6 +50,12 @@ func parseSearchOptions(args []string) (searchOptions, error) {
 		return options, fmt.Errorf("supply at most one nonempty query; quote multiword searches")
 	}
 	options.query = flags.Arg(0)
+	if options.limit < 1 || options.limit > 100 {
+		return options, fmt.Errorf("--limit must be between 1 and 100")
+	}
+	if options.offset < 0 {
+		return options, fmt.Errorf("--offset must be zero or greater")
+	}
 	switch options.date {
 	case "upcoming", "this_week", "this_month", "past", "all":
 	default:

@@ -18,7 +18,7 @@ Options:
   -h, --help     Show help
   --version      Show version
 
-Search shows up to 20 matches as a table, defaulting to upcoming huddlz.
+Search shows one page as a table, defaulting to 20 upcoming huddlz.
 Run 'huddlz search --help' for supported filters and options.
 Set HUDDLZ_URL to override the default server, https://huddlz.com.
 Location filters, search JSON output, details, RSVP, and login are planned.

@@ -14,6 +14,7 @@ Feature: Discover public huddlz
       | search_time_zone | America/New_York |
       | sort             | starts_at        |
       | page[limit]      | 20               |
+      | page[offset]     | 0                |
     And the output describes filters "this_week", "in_person", and "America/New_York"
     And I see the matching huddlz in a readable table
     And the command succeeds
@@ -52,6 +53,7 @@ Feature: Discover public huddlz
       | search_time_zone | <resolved_zone> |
       | sort             | starts_at       |
       | page[limit]      | 20              |
+      | page[offset]     | 0                |
     And the output describes filters "<date>", "<type>", and "<resolved_zone>"
     And I see the matching huddlz in a readable table
     And the command succeeds

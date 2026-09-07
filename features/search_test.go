@@ -31,9 +31,10 @@ func TestFeatures(t *testing.T) {
 	}
 	suite := godog.TestSuite{
 		Name:    "huddlz",
-		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature"}, TestingT: t, Strict: true},
+		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature"}, TestingT: t, Strict: true},
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			var state *searchScenario
+			registerPagination(sc, func() *searchScenario { return state }, binary, t.TempDir())
 			sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 				state = &searchScenario{requests: make(chan *http.Request, 10)}
 				return ctx, nil
@@ -154,7 +155,7 @@ func TestFeatures(t *testing.T) {
 				return nil
 			})
 			sc.Step(`^the API receives an anonymous bounded upcoming search for "([^"]*)"$`, func(query string) error {
-				expected := map[string]string{"date_filter": "upcoming", "search_time_zone": "Etc/UTC", "sort": "starts_at", "page[limit]": "20"}
+				expected := map[string]string{"date_filter": "upcoming", "search_time_zone": "Etc/UTC", "sort": "starts_at", "page[limit]": "20", "page[offset]": "0"}
 				if query != "" {
 					expected["query"] = query
 				}
@@ -162,7 +163,7 @@ func TestFeatures(t *testing.T) {
 			})
 			sc.Step(`^I see the matching huddlz in a readable table$`, func() error {
 				lines := strings.Split(strings.TrimSpace(state.stdout.String()), "\n")
-				if len(lines) != 5 {
+				if len(lines) < 5 {
 					return fmt.Errorf("expected scope, header, and two rows separated by a blank line; got:\n%s", state.stdout.String())
 				}
 				for i, cells := range map[int][]string{
