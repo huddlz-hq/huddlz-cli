@@ -109,7 +109,12 @@ func auth(args []string, stdout, stderr io.Writer) int {
 		User *authAccount `json:"user"`
 	}
 	if err := authRequest(server, "me", token, nil, &result); err != nil {
-		fmt.Fprintln(stderr, "Account verification failed:", err)
+		var status httpStatusError
+		if errors.As(err, &status) && status == http.StatusUnauthorized {
+			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")
+		} else {
+			fmt.Fprintln(stderr, "Account verification failed:", err)
+		}
 		return 1
 	}
 	if result.User == nil || strings.TrimSpace(result.User.ID) == "" || strings.TrimSpace(result.User.Email) == "" {

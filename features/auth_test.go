@@ -20,6 +20,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var home string
 	var serverOverride string
 	var redirectLogin bool
+	var accountStatus int
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -29,6 +30,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		s := current()
 		serverOverride = ""
 		redirectLogin = false
+		accountStatus = http.StatusOK
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
@@ -46,6 +48,11 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				}
 				fmt.Fprint(w, `{"token":"test-session-secret","user":{"id":"account-id","email":"person@example.com","display_name":"Test Person"}}`)
 			case "/api/auth/me":
+				if accountStatus != http.StatusOK {
+					w.WriteHeader(accountStatus)
+					fmt.Fprint(w, `{"error":"test-session-secret test-password"}`)
+					return
+				}
 				if r.Method != "GET" || r.Header.Get("Authorization") != "Bearer test-session-secret" {
 					w.WriteHeader(401)
 					return
@@ -133,6 +140,33 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		s := current()
 		if s.exitCode != 2 || s.stdout.Len() != 0 || !strings.Contains(s.stderr.String(), "authentication requires HTTPS") || len(s.requests) != 0 {
 			return fmt.Errorf("expected insecure-server usage rejection")
+		}
+		return nil
+	})
+
+	sc.Step(`^account verification returns HTTP (\d+)$`, func(status int) { accountStatus = status })
+	sc.Step(`^my saved credentials have expired$`, func() {
+		accountStatus = http.StatusUnauthorized
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+	})
+	sc.Step(`^authentication is required without prompting or exposing credentials$`, func() error {
+		s := current()
+		if s.exitCode != 1 || s.stdout.Len() != 0 || s.stderr.String() != "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.\n" {
+			return fmt.Errorf("expected safe authentication-required diagnostic, exit=%d", s.exitCode)
+		}
+		return nil
+	})
+	sc.Step(`^only the rejected account verification was attempted$`, func() error {
+		s := current()
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected one account verification, got %d", len(s.requests))
+		}
+		r := <-s.requests
+		if r.Method != "GET" || r.URL.Path != "/api/auth/me" {
+			return fmt.Errorf("unexpected authenticated operation")
 		}
 		return nil
 	})

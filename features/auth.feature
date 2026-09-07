@@ -52,3 +52,26 @@ Feature: Authenticate and verify the current account
     When I check authentication status in a new process
     Then the command succeeds
     And I see my account without credentials
+
+  Scenario: Explain expired credentials on an authenticated operation
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    Given my saved credentials have expired
+    When I check authentication status in a new process
+    Then authentication is required without prompting or exposing credentials
+    And only the rejected account verification was attempted
+
+  Scenario Outline: Account verification failures do not imply expired credentials
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    Given account verification returns HTTP <status>
+    When I check authentication status in a new process
+    Then the command fails with "Account verification failed: HTTP <status>"
+    And only a private session token is saved
+
+    Examples:
+      | status |
+      | 403    |
+      | 503    |

@@ -256,3 +256,10 @@ A rejected email/password reports a clear login failure on stderr, exits with
 status 1, and leaves stdout empty. It creates no saved session and preserves any
 existing session for that server. Diagnostics never include the server's error
 body, password, or token.
+
+If the server rejects a saved session with HTTP 401, `auth status` exits with
+status 1 and explains how to log in again. It prints no account data, exposes no
+token, and never opens a login prompt automatically. The server may reject an
+expired or revoked token; the CLI does not claim to distinguish those causes.
+Other failures, such as HTTP 403 or 503, remain account-verification errors.
+Failed verification leaves the saved token unchanged.
