@@ -85,7 +85,12 @@ func auth(args []string, stdout, stderr io.Writer) int {
 			Token string `json:"token"`
 		}
 		if err := authRequest(server, "sign_in", "", payload, &result); err != nil {
-			fmt.Fprintln(stderr, "Login failed:", err)
+			var status httpStatusError
+			if errors.As(err, &status) && status == http.StatusUnauthorized {
+				fmt.Fprintln(stderr, "Login failed: email or password was not accepted. Saved sessions have not been changed.")
+			} else {
+				fmt.Fprintln(stderr, "Login failed:", err)
+			}
 			return 1
 		}
 		token = result.Token

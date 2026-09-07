@@ -41,6 +41,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				var credentials struct{ Email, Password string }
 				if r.Method != "POST" || json.NewDecoder(r.Body).Decode(&credentials) != nil || credentials.Email != "person@example.com" || credentials.Password != "test-password" {
 					w.WriteHeader(401)
+					fmt.Fprint(w, `{"error":"wrong-password test-session-secret"}`)
 					return
 				}
 				fmt.Fprint(w, `{"token":"test-session-secret","user":{"id":"account-id","email":"person@example.com","display_name":"Test Person"}}`)
@@ -132,6 +133,28 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		s := current()
 		if s.exitCode != 2 || s.stdout.Len() != 0 || !strings.Contains(s.stderr.String(), "authentication requires HTTPS") || len(s.requests) != 0 {
 			return fmt.Errorf("expected insecure-server usage rejection")
+		}
+		return nil
+	})
+
+	sc.Step(`^I log in with an incorrect password$`, func() error {
+		return run([]string{"login", "--email", "person@example.com", "--password-stdin"}, "wrong-password\n")
+	})
+	sc.Step(`^the rejected login is reported without credentials$`, func() error {
+		s := current()
+		if s.exitCode != 1 || s.stdout.Len() != 0 || s.stderr.String() != "Login failed: email or password was not accepted. Saved sessions have not been changed.\n" {
+			return fmt.Errorf("expected safe rejected-login diagnostic, exit=%d", s.exitCode)
+		}
+		return nil
+	})
+	sc.Step(`^no account verification followed the rejected login$`, func() error {
+		s := current()
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected just one sign-in request, got %d", len(s.requests))
+		}
+		r := <-s.requests
+		if r.URL.Path != "/api/auth/sign_in" {
+			return fmt.Errorf("unexpected request path")
 		}
 		return nil
 	})

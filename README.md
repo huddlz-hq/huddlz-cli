@@ -251,3 +251,8 @@ using authenticated sessions for attendance actions is the next increment.
 
 Logout/revocation is tracked separately in #16. For now, removing a saved token
 file removes local access but does not revoke the token on the server.
+
+A rejected email/password reports a clear login failure on stderr, exits with
+status 1, and leaves stdout empty. It creates no saved session and preserves any
+existing session for that server. Diagnostics never include the server's error
+body, password, or token.

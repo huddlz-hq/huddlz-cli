@@ -33,3 +33,22 @@ Feature: Authenticate and verify the current account
     Given the authentication API accepts my credentials
     When I attempt login over remote plaintext HTTP
     Then authentication rejects the insecure server without a request
+
+  Scenario: Report rejected authentication without creating a session
+    Given the authentication API accepts my credentials
+    When I log in with an incorrect password
+    Then the rejected login is reported without credentials
+    When I check authentication status in a new process
+    Then the command fails with "not logged in to this server"
+    And no account verification followed the rejected login
+
+  Scenario: Rejected credentials preserve an existing valid session
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    When I log in with an incorrect password
+    Then the rejected login is reported without credentials
+    And only a private session token is saved
+    When I check authentication status in a new process
+    Then the command succeeds
+    And I see my account without credentials
