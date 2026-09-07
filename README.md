@@ -2,24 +2,44 @@
 
 A command-line client for humans and agents to discover huddlz and manage RSVPs.
 
-This is an early CLI with help, version, and one public search slice. Credentials
+This is an early CLI with help, version, and public search. Credentials
 and profile preferences are not implemented yet.
 
 ```sh
 huddlz search
 huddlz search --anywhere "board games"
+huddlz search "board games" --date this_week --type in_person --time-zone America/New_York
 ```
 
-Search requests the first 20 upcoming matches, ordered soonest first, and prints
-a table. It uses `https://huddlz.com`; set `HUDDLZ_URL` to use another server.
+Search requests the first 20 matches, ordered by start time ascending, and prints
+a table. It defaults to upcoming huddlz and uses `https://huddlz.com`; set
+`HUDDLZ_URL` to use another server.
 Omit the query to browse. Anonymous search is unrestricted geographically and
-prints that scope explicitly. For text search, put `--anywhere` before the quoted query. Search
-JSON output, additional filters, and fetching subsequent pages remain planned.
+prints that scope explicitly. Options may appear before or after the quoted
+query. `--anywhere` also explicitly selects that geographic scope.
+
+| Option | Accepted values | Default |
+| --- | --- | --- |
+| `--date` | `upcoming`, `this_week`, `this_month`, `past`, `all` | `upcoming` |
+| `--type` | `in_person`, `virtual`, `hybrid` | All types when omitted |
+| `--time-zone` | Canonical IANA name, such as `America/New_York` or `Etc/UTC` | `Etc/UTC` |
+
+The chosen calendar timezone is sent to the server and shown in the search
+scope. `UTC` is accepted as shorthand for `Etc/UTC`. The API determines calendar
+boundaries and applies all filters together; the CLI does not filter a downloaded
+page locally. Result timestamps retain the offsets supplied by the API. Invalid
+date/type values and noncanonical timezones fail before a request is sent.
+Aliases such as `US/Eastern` are rejected; use `America/New_York` instead.
+
+Search JSON output, geographic filters, and subsequent pages remain planned.
 
 ## Development
 
-Requires Go 1.26 or later. The executable uses only the standard library;
-acceptance tests use Godog.
+Requires Go 1.26 or later. The CLI uses pflag for option parsing and Godog for
+acceptance tests. Canonical IANA timezone names are bundled in the executable;
+calendar calculations remain on the server. The name list matches IANA tzdata
+2026c and can be refreshed with `sh scripts/update-timezones.sh <release>` when
+the backend adopts a newer release. The script requires curl, tar, awk, and sort.
 
 ```sh
 go run ./cmd/huddlz help
@@ -37,8 +57,8 @@ Run the executable search scenarios with:
 go test ./features -run TestFeatures -v -count=1
 ```
 
-`features/search.feature` covers anonymous browsing, search by interest, no
-matches, and API failures. Godog builds and runs the actual CLI against an
+`features/search.feature` covers anonymous browsing, search by interest, combined
+date/type filters, invalid inputs, no matches, and API failures. Godog builds and runs the actual CLI against an
 isolated local HTTP server. Scenarios check query encoding, upcoming ordering,
 the page limit, absence of credentials, readable results, stderr, and exit
 status. HTTP errors, disconnected responses, and malformed JSON:API responses

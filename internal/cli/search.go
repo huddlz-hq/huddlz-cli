@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,18 +12,23 @@ import (
 	"text/tabwriter"
 	"time"
 	"unicode"
+
+	"github.com/spf13/pflag"
 )
 
 // Anonymous searches have no profile defaults, so their scope is everywhere.
 func search(args []string, stdout, stderr io.Writer) int {
-	query := ""
-	switch {
-	case len(args) == 0:
-	case len(args) == 1 && args[0] == "--anywhere":
-	case len(args) == 2 && args[0] == "--anywhere" && strings.TrimSpace(args[1]) != "":
-		query = args[1]
-	default:
-		fmt.Fprintln(stderr, "Usage: huddlz search [--anywhere [<query>]]")
+	options, err := parseSearchOptions(args)
+	if errors.Is(err, pflag.ErrHelp) {
+		if _, err := io.WriteString(stdout, searchHelp); err != nil {
+			fmt.Fprintln(stderr, "Could not write output:", err)
+			return 1
+		}
+		return 0
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		fmt.Fprint(stderr, searchHelp)
 		return 2
 	}
 	base := os.Getenv("HUDDLZ_URL")
@@ -35,9 +41,12 @@ func search(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	endpoint = endpoint.JoinPath("api/json/huddlz")
-	params := url.Values{"date_filter": {"upcoming"}, "sort": {"starts_at"}, "page[limit]": {"20"}}
-	if query != "" {
-		params.Set("query", query)
+	params := url.Values{"date_filter": {options.date}, "search_time_zone": {options.timeZone}, "sort": {"starts_at"}, "page[limit]": {"20"}}
+	if options.query != "" {
+		params.Set("query", options.query)
+	}
+	if options.kind != "" {
+		params.Set("event_type", options.kind)
 	}
 	endpoint.RawQuery = params.Encode()
 	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
@@ -82,7 +91,11 @@ func search(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	var output strings.Builder
-	fmt.Fprintln(&output, "Searching everywhere · upcoming · up to 20 results")
+	kind := options.kind
+	if kind == "" {
+		kind = "all types"
+	}
+	fmt.Fprintf(&output, "Searching everywhere · %s · %s · calendar timezone: %s · up to 20 results\n", options.date, kind, options.timeZone)
 	fmt.Fprintln(&output)
 	if len(*document.Data) == 0 {
 		fmt.Fprintln(&output, "No matching huddlz.")

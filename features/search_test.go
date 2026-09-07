@@ -91,14 +91,10 @@ func TestFeatures(t *testing.T) {
 				}))
 				return nil
 			})
-			runSearch := func(query string) error {
+			runSearchArgs := func(args []string) error {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				args := []string{"search"}
-				if query != "" {
-					args = append(args, "--anywhere", query)
-				}
-				cmd := exec.CommandContext(ctx, binary, args...)
+				cmd := exec.CommandContext(ctx, binary, append([]string{"search"}, args...)...)
 				// Isolate the subprocess from developer credentials and preferences.
 				cmd.Env = []string{"HUDDLZ_URL=" + state.server.URL, "HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
 				cmd.Stdout, cmd.Stderr = &state.stdout, &state.stderr
@@ -112,36 +108,57 @@ func TestFeatures(t *testing.T) {
 				}
 				return err
 			}
+			runSearch := func(query string) error {
+				if query == "" {
+					return runSearchArgs(nil)
+				}
+				return runSearchArgs([]string{"--anywhere", query})
+			}
 			sc.Step(`^I search everywhere for "([^"]*)"$`, runSearch)
 			sc.Step(`^I browse upcoming huddlz$`, func() error { return runSearch("") })
-			sc.Step(`^the API receives an anonymous bounded upcoming search for "([^"]*)"$`, func(query string) error {
+			sc.Step(`^I search with these arguments:$`, func(table *godog.Table) error {
+				var args []string
+				for _, row := range table.Rows {
+					args = append(args, row.Cells[0].Value)
+				}
+				return runSearchArgs(args)
+			})
+			sc.Step(`^I search with "([^"]*)" set to "([^"]*)"$`, func(option, value string) error {
+				return runSearchArgs([]string{option, value})
+			})
+			sc.Step(`^the command rejects "([^"]*)" without searching$`, func(option string) error {
+				if state.exitCode != 2 || !strings.Contains(state.stderr.String(), option) || state.stdout.Len() != 0 {
+					return fmt.Errorf("expected usage error naming %s, got exit=%d stdout=%q stderr=%q", option, state.exitCode, state.stdout.String(), state.stderr.String())
+				}
 				select {
 				case r := <-state.requests:
-					if r.Method != "GET" || r.URL.Path != "/api/json/huddlz" {
-						return fmt.Errorf("unexpected request: %s %s", r.Method, r.URL)
-					}
-					expected := map[string]string{"date_filter": "upcoming", "sort": "starts_at", "page[limit]": "20"}
-					if query != "" {
-						expected["query"] = query
-					}
-					for key, want := range expected {
-						if got := r.URL.Query().Get(key); got != want {
-							return fmt.Errorf("query %s: want %q, got %q", key, want, got)
-						}
-					}
-					if len(r.URL.Query()) != len(expected) {
-						return fmt.Errorf("unexpected search filters: %s", r.URL.RawQuery)
-					}
-					if r.Header.Get("Authorization") != "" {
-						return fmt.Errorf("public search sent credentials")
-					}
-					if r.Header.Get("Accept") != "application/vnd.api+json" {
-						return fmt.Errorf("request did not accept JSON:API")
-					}
-					return nil
+					return fmt.Errorf("invalid options sent API request: %s", r.URL)
 				default:
-					return fmt.Errorf("no API request received; exit=%d, stderr=%q", state.exitCode, state.stderr.String())
+					return nil
 				}
+			})
+			sc.Step(`^the API receives these search filters:$`, func(table *godog.Table) error {
+				expected := make(map[string]string)
+				for _, row := range table.Rows {
+					expected[row.Cells[0].Value] = row.Cells[1].Value
+				}
+				return state.expectSearch(expected)
+			})
+			sc.Step(`^the output describes filters "([^"]*)", "([^"]*)", and "([^"]*)"$`, func(date, kind, zone string) error {
+				firstLine := strings.Split(state.stdout.String(), "\n")[0]
+				for _, want := range []string{date, kind, zone} {
+					if !strings.Contains(firstLine, want) {
+						return fmt.Errorf("search scope missing %q: %s", want, firstLine)
+					}
+				}
+				return nil
+			})
+			sc.Step(`^the API receives an anonymous bounded upcoming search for "([^"]*)"$`, func(query string) error {
+				expected := map[string]string{"date_filter": "upcoming", "search_time_zone": "Etc/UTC", "sort": "starts_at", "page[limit]": "20"}
+				if query != "" {
+					expected["query"] = query
+				}
+				return state.expectSearch(expected)
 			})
 			sc.Step(`^I see the matching huddlz in a readable table$`, func() error {
 				lines := strings.Split(strings.TrimSpace(state.stdout.String()), "\n")
@@ -190,5 +207,32 @@ func TestFeatures(t *testing.T) {
 	}
 	if suite.Run() != 0 {
 		t.Fatal("Cucumber scenarios failed")
+	}
+}
+
+func (s *searchScenario) expectSearch(expected map[string]string) error {
+	select {
+	case r := <-s.requests:
+		if r.Method != "GET" || r.URL.Path != "/api/json/huddlz" {
+			return fmt.Errorf("unexpected request: %s %s", r.Method, r.URL)
+		}
+		if r.Header.Get("Authorization") != "" {
+			return fmt.Errorf("public search sent credentials")
+		}
+		if r.Header.Get("Accept") != "application/vnd.api+json" {
+			return fmt.Errorf("request did not accept JSON:API")
+		}
+		if len(r.URL.Query()) != len(expected) {
+			return fmt.Errorf("unexpected search filters: %s", r.URL.RawQuery)
+		}
+		for key, want := range expected {
+			got := r.URL.Query()[key]
+			if len(got) != 1 || got[0] != want {
+				return fmt.Errorf("filter %s: want one value %q, got %q", key, want, got)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("no API request; exit=%d, stderr=%q", s.exitCode, s.stderr.String())
 	}
 }

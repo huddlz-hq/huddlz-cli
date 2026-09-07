@@ -12,13 +12,14 @@ const help = `huddlz — a CLI for humans and agents
 Usage:
   huddlz help
   huddlz version [--json]
-  huddlz search [--anywhere [<query>]]
+  huddlz search [<query>] [--date <filter>] [--type <type>] [--time-zone <zone>]
 
 Options:
   -h, --help     Show help
   --version      Show version
 
-Search currently supports the first 20 upcoming matches, shown as a table.
+Search shows up to 20 matches as a table, defaulting to upcoming huddlz.
+Run 'huddlz search --help' for supported filters and options.
 Set HUDDLZ_URL to override the default server, https://huddlz.com.
 Location filters, search JSON output, details, RSVP, and login are planned.
 `
