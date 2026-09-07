@@ -75,3 +75,37 @@ Feature: Authenticate and verify the current account
       | status |
       | 403    |
       | 503    |
+
+  Scenario: Stop using a saved session after sign-out
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    When I sign out
+    Then the command succeeds
+    And sign-out revokes the saved session without exposing it
+    When I check authentication status in a new process
+    Then the command fails with "not logged in to this server"
+    And no authenticated request follows sign-out
+
+  Scenario Outline: Sign-out stops local use when server revocation fails
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    Given server revocation fails with "<failure>"
+    When I sign out
+    Then local sign-out reports unconfirmed server revocation
+    When I check authentication status in a new process
+    Then the command fails with "not logged in to this server"
+    And no authenticated request follows sign-out
+
+    Examples:
+      | failure      |
+      | expired      |
+      | unavailable  |
+      | disconnected |
+
+  Scenario: Sign-out with no saved session is harmless
+    Given the authentication API accepts my credentials
+    When I sign out
+    Then the command succeeds
+    And I am already signed out without a server request

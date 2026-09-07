@@ -12,6 +12,7 @@ const help = `huddlz — a CLI for humans and agents
 Usage:
   huddlz auth login --email <email> [--password-stdin]
   huddlz auth status
+  huddlz auth logout
   huddlz show <id>
   huddlz help
   huddlz version [--json]

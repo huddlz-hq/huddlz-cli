@@ -2,12 +2,15 @@ package cli
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+var errNoSession = errors.New("not logged in to this server; run 'huddlz auth login --email <email>'")
 
 func sessionPath(server *url.URL) (string, error) {
 	root, err := os.UserConfigDir()
@@ -50,7 +53,7 @@ func loadSession(server *url.URL) (string, error) {
 	}
 	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
-		return "", fmt.Errorf("not logged in to this server; run 'huddlz auth login --email <email>'")
+		return "", errNoSession
 	}
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 64<<10 {
 		return "", fmt.Errorf("session file must be a user-only regular file")
@@ -60,4 +63,15 @@ func loadSession(server *url.URL) (string, error) {
 		return "", fmt.Errorf("could not read a valid saved session; log in again")
 	}
 	return string(data), nil
+}
+
+func removeSession(server *url.URL) error {
+	path, err := sessionPath(server)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("could not remove saved session")
+	}
+	return nil
 }

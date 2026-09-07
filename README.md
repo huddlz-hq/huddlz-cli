@@ -129,7 +129,6 @@ Planned additions (not implemented):
 | Address lookup and profile defaults | Choose search locations without coordinates |
 | `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |
-| `huddlz auth logout` | End the local session and handle server revocation |
 
 Command conventions:
 
@@ -249,8 +248,18 @@ Authentication requires HTTPS except for loopback development servers and does
 not follow redirects. Search and show continue to use anonymous public reads;
 using authenticated sessions for attendance actions is the next increment.
 
-Logout/revocation is tracked separately in #16. For now, removing a saved token
-file removes local access but does not revoke the token on the server.
+Use `huddlz auth logout` to remove the saved session for the selected server and
+revoke its JWT through `DELETE /api/auth/sign_out`. Local removal happens first,
+so subsequent commands stop using the token even if the server cannot be reached.
+A confirmed revocation exits 0. If revocation cannot be confirmed (including a
+rejected or expired token), logout exits 1 and explicitly reports that local
+removal succeeded; it does not claim the server token was revoked. With no saved
+session, logout succeeds without a network request. If local removal fails, the
+command reports failure and does not claim to be signed out.
+
+Logout affects only this server's saved session. API-key and environment-based
+credentials are not supported yet; this command does not modify the caller's
+environment or revoke API keys.
 
 A rejected email/password reports a clear login failure on stderr, exits with
 status 1, and leaves stdout empty. It creates no saved session and preserves any

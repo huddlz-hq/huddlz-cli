@@ -21,6 +21,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var serverOverride string
 	var redirectLogin bool
 	var accountStatus int
+	var revocationFailure string
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -31,6 +32,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		serverOverride = ""
 		redirectLogin = false
 		accountStatus = http.StatusOK
+		revocationFailure = ""
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
@@ -47,6 +49,28 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 					return
 				}
 				fmt.Fprint(w, `{"token":"test-session-secret","user":{"id":"account-id","email":"person@example.com","display_name":"Test Person"}}`)
+			case "/api/auth/sign_out":
+				switch revocationFailure {
+				case "expired":
+					w.WriteHeader(401)
+					fmt.Fprint(w, `{"error":"test-session-secret"}`)
+					return
+				case "unavailable":
+					w.WriteHeader(503)
+					return
+				case "disconnected":
+					conn, _, err := w.(http.Hijacker).Hijack()
+					if err == nil {
+						conn.Close()
+					}
+					return
+				}
+
+				if r.Method != "DELETE" || r.Header.Get("Authorization") != "Bearer test-session-secret" {
+					w.WriteHeader(401)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
 			case "/api/auth/me":
 				if accountStatus != http.StatusOK {
 					w.WriteHeader(accountStatus)
@@ -167,6 +191,57 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		r := <-s.requests
 		if r.Method != "GET" || r.URL.Path != "/api/auth/me" {
 			return fmt.Errorf("unexpected authenticated operation")
+		}
+		return nil
+	})
+
+	sc.Step(`^server revocation fails with "([^"]*)"$`, func(failure string) { revocationFailure = failure })
+	sc.Step(`^local sign-out reports unconfirmed server revocation$`, func() error {
+		s := current()
+		if s.exitCode != 1 || s.stdout.Len() != 0 || !strings.HasPrefix(s.stderr.String(), "Saved session removed locally; server revocation could not be confirmed:") || strings.Contains(s.stderr.String(), "test-session-secret") {
+			return fmt.Errorf("expected safe partial sign-out failure")
+		}
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected one revocation attempt")
+		}
+		r := <-s.requests
+		if r.Method != "DELETE" || r.URL.Path != "/api/auth/sign_out" {
+			return fmt.Errorf("unexpected revocation request")
+		}
+		return nil
+	})
+	sc.Step(`^I am already signed out without a server request$`, func() error {
+		s := current()
+		if s.stdout.String() != "Already signed out of this server.\n" || len(s.requests) != 0 {
+			return fmt.Errorf("expected local already-signed-out result")
+		}
+		return nil
+	})
+
+	sc.Step(`^I sign out$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return run([]string{"logout"}, "")
+	})
+	sc.Step(`^sign-out revokes the saved session without exposing it$`, func() error {
+		s := current()
+		if s.stdout.String() != "Signed out. Saved session removed and server token revoked.\n" {
+			return fmt.Errorf("expected confirmed sign-out")
+		}
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected one sign-out request, got %d", len(s.requests))
+		}
+		r := <-s.requests
+		if r.Method != "DELETE" || r.URL.Path != "/api/auth/sign_out" {
+			return fmt.Errorf("unexpected sign-out request")
+		}
+		return nil
+	})
+	sc.Step(`^no authenticated request follows sign-out$`, func() error {
+		if len(current().requests) != 0 {
+			return fmt.Errorf("unexpected request after sign-out")
 		}
 		return nil
 	})

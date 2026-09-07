@@ -20,10 +20,12 @@ import (
 const authHelp = `Usage:
   huddlz auth login --email <email> [--password-stdin]
   huddlz auth status
+  huddlz auth logout
 
 Login prompts for a hidden password; --password-stdin reads it from standard input.
 Only the session token is saved, scoped to this server, in a user-only file.
 Status verifies the saved session with the server.
+Logout removes the local session and attempts server revocation.
 `
 
 type authAccount struct {
@@ -56,7 +58,7 @@ func auth(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprint(stderr, authHelp)
 			return 2
 		}
-	case "status":
+	case "status", "logout":
 		if len(args) != 1 {
 			fmt.Fprint(stderr, authHelp)
 			return 2
@@ -69,6 +71,9 @@ func auth(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
+	}
+	if args[0] == "logout" {
+		return logout(server, stdout, stderr)
 	}
 	var token string
 	if args[0] == "login" {
@@ -84,7 +89,7 @@ func auth(args []string, stdout, stderr io.Writer) int {
 		var result struct {
 			Token string `json:"token"`
 		}
-		if err := authRequest(server, "sign_in", "", payload, &result); err != nil {
+		if err := authRequest(server, http.MethodPost, "sign_in", "", payload, &result); err != nil {
 			var status httpStatusError
 			if errors.As(err, &status) && status == http.StatusUnauthorized {
 				fmt.Fprintln(stderr, "Login failed: email or password was not accepted. Saved sessions have not been changed.")
@@ -108,7 +113,7 @@ func auth(args []string, stdout, stderr io.Writer) int {
 	var result struct {
 		User *authAccount `json:"user"`
 	}
-	if err := authRequest(server, "me", token, nil, &result); err != nil {
+	if err := authRequest(server, http.MethodGet, "me", token, nil, &result); err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
 			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")
@@ -171,11 +176,7 @@ func authServer() (*url.URL, error) {
 }
 
 // Authentication never follows redirects or prints response bodies and transport errors.
-func authRequest(server *url.URL, action, token string, payload []byte, result any) error {
-	method := http.MethodGet
-	if payload != nil {
-		method = http.MethodPost
-	}
+func authRequest(server *url.URL, method, action, token string, payload []byte, result any) error {
 	request, err := http.NewRequest(method, server.JoinPath("api/auth", action).String(), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("could not create authentication request")
@@ -193,6 +194,12 @@ func authRequest(server *url.URL, action, token string, payload []byte, result a
 		return fmt.Errorf("authentication request could not be completed")
 	}
 	defer response.Body.Close()
+	if result == nil {
+		if response.StatusCode == http.StatusNoContent {
+			return nil
+		}
+		return httpStatusError(response.StatusCode)
+	}
 	if response.StatusCode != http.StatusOK {
 		return httpStatusError(response.StatusCode)
 	}
