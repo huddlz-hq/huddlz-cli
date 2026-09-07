@@ -127,7 +127,6 @@ Planned additions (not implemented):
 | Command | Purpose |
 | --- | --- |
 | Address lookup and profile defaults | Choose search locations without coordinates |
-| `huddlz rsvp cancel <id>` | Cancel an RSVP |
 
 Command conventions:
 
@@ -288,8 +287,7 @@ is still waitlisted; a successful mutation alone does not establish attendance.
 Backend rejections remain failures. If submission succeeds but verification fails
 or finds no confirmed attendance, the CLI reports uncertainty and exits 1. It
 does not automatically repeat the mutation or join a waitlist. Missing or rejected
-credentials fail without an interactive login prompt. Waitlist and cancellation
-commands are separate increments.
+credentials fail without an interactive login prompt. Joining a waitlist remains a separate increment.
 
 ### List my RSVPs
 
@@ -314,3 +312,22 @@ JSON contains `groups`, each with `status`, `data` (the same huddl resource shap
 as search), and `pagination` (`known`, `limit`, `offset`, `next_offset`, and
 `next_command`). Continuation commands select just that group's status and
 preserve `--json`. Missing pagination metadata is distinguished from the last page.
+
+### Cancel an RSVP or leave a waitlist
+
+```sh
+huddlz rsvp cancel <id>
+```
+
+Uses the saved session to submit one `PATCH /api/json/huddlz/<id>/cancel_rsvp`.
+The backend removes either confirmed attendance or an existing waitlist entry.
+The CLI validates the mutation response, then checks the exact huddl ID against
+both `attending` and `waitlisted` membership. It reports success only after both
+checks return empty results. These checks reflect the API's current visibility
+and are separate reads, not a transactional snapshot.
+
+A rejected mutation, remaining membership, invalid response, or verification
+failure exits nonzero without claiming cancellation succeeded. When submission
+succeeded but verification did not, the diagnostic states that distinction. The
+CLI never automatically repeats the mutation. No new waitlist-join API is needed
+to leave an existing waitlist entry.

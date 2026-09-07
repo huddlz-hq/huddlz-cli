@@ -1,18 +1,19 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
-const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
+const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\n       huddlz rsvp cancel <id>\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
 
 func rsvp(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "cancel" {
+		return cancelRSVP(args[1:], stdout, stderr)
+	}
 	if len(args) > 0 && args[0] == "list" {
 		return listRSVPs(args[1:], stdout, stderr)
 	}
@@ -37,36 +38,23 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	id := strings.ToLower(args[0])
-	payload, _ := json.Marshal(struct {
-		Data huddlIdentity `json:"data"`
-	}{huddlIdentity{ID: id, Type: "huddl"}})
-	var response struct {
-		Data *huddlIdentity `json:"data"`
-	}
-	endpoint := server.JoinPath("api/json/huddlz", id, "rsvp")
-	if err := sessionRequest(endpoint, http.MethodPatch, token, payload, &response, "application/vnd.api+json"); err != nil {
+	if err := submitAttendance(server, token, id, "rsvp"); err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
 			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")
+		} else if errors.Is(err, errInvalidAttendanceResponse) {
+			fmt.Fprintln(stderr, "RSVP response was invalid; attendance was not confirmed.")
 		} else {
 			fmt.Fprintln(stderr, "RSVP request failed; attendance was not confirmed:", err)
 		}
 		return 1
 	}
-	if response.Data == nil || response.Data.ID != id || response.Data.Type != "huddl" {
-		fmt.Fprintln(stderr, "RSVP response was invalid; attendance was not confirmed.")
-		return 1
-	}
-	endpoint = server.JoinPath("api/json/huddlz")
-	endpoint.RawQuery = url.Values{"filter[id][eq]": {id}, "relationship": {"attending"}, "date_filter": {"all"}, "search_time_zone": {"Etc/UTC"}, "page[limit]": {"1"}}.Encode()
-	var attendance struct {
-		Data *[]huddlIdentity `json:"data"`
-	}
-	if err := sessionRequest(endpoint, http.MethodGet, token, nil, &attendance, "application/vnd.api+json"); err != nil {
+	attending, err := attendanceMembership(server, token, id, "attending")
+	if err != nil {
 		fmt.Fprintln(stderr, "RSVP was submitted, but attendance could not be verified:", err)
 		return 1
 	}
-	if attendance.Data == nil || len(*attendance.Data) != 1 || (*attendance.Data)[0].ID != id || (*attendance.Data)[0].Type != "huddl" {
+	if !attending {
 		fmt.Fprintln(stderr, "RSVP was submitted, but the server did not confirm attendance. You may still be waitlisted.")
 		return 1
 	}

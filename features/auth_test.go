@@ -25,6 +25,9 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var rsvpStatus int
 	var attendanceConfirmed bool
 	var listMode, nextListCommand string
+	var cancellationMembership string
+	var cancelled bool
+	var cancelMode string
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -39,6 +42,9 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		rsvpStatus = http.StatusOK
 		attendanceConfirmed = true
 		listMode = ""
+		cancellationMembership = ""
+		cancelled = false
+		cancelMode = ""
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
@@ -55,6 +61,19 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 					return
 				}
 				fmt.Fprint(w, `{"token":"test-session-secret","user":{"id":"account-id","email":"person@example.com","display_name":"Test Person"}}`)
+			case "/api/json/huddlz/11111111-1111-4111-8111-111111111111/cancel_rsvp":
+				var body struct{ Data struct{ ID, Type string } }
+				if r.Method != "PATCH" || r.Header.Get("Authorization") != "Bearer test-session-secret" || r.Header.Get("Content-Type") != "application/vnd.api+json" || json.NewDecoder(r.Body).Decode(&body) != nil || body.Data.ID != "11111111-1111-4111-8111-111111111111" || body.Data.Type != "huddl" || cancellationMembership == "" {
+					w.WriteHeader(400)
+					return
+				}
+				if cancelMode == "rejected" {
+					w.WriteHeader(403)
+					fmt.Fprint(w, `{"errors":[{"detail":"test-session-secret"}]}`)
+					return
+				}
+				cancelled = cancelMode != "retained"
+				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
 			case "/api/json/huddlz/11111111-1111-4111-8111-111111111111/rsvp":
 				if rsvpStatus != http.StatusOK {
 					w.WriteHeader(rsvpStatus)
@@ -74,6 +93,23 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
 			case "/api/json/huddlz":
 				q := r.URL.Query()
+				if cancellationMembership != "" && q.Get("filter[id][eq]") != "" {
+					if r.Header.Get("Authorization") != "Bearer test-session-secret" || r.Method != "GET" || q.Get("filter[id][eq]") != "11111111-1111-4111-8111-111111111111" || q.Get("date_filter") != "all" || (q.Get("relationship") != "attending" && q.Get("relationship") != "waitlisted") {
+						w.WriteHeader(400)
+						return
+					}
+					if cancelMode == "unavailable" && q.Get("relationship") == "waitlisted" {
+						w.WriteHeader(503)
+						return
+					}
+					if cancelled || q.Get("relationship") != cancellationMembership {
+						fmt.Fprint(w, `{"data":[]}`)
+					} else {
+						fmt.Fprint(w, `{"data":[{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}]}`)
+					}
+					return
+				}
+
 				if q.Get("filter[id][eq]") == "" {
 					if r.Method != "GET" || r.Header.Get("Authorization") != "Bearer test-session-secret" || q.Get("date_filter") != "all" || q.Get("sort") != "starts_at" || q.Get("page[limit]") != "20" || (q.Get("page[offset]") != "0" && q.Get("page[offset]") != "1") {
 						w.WriteHeader(400)
@@ -302,6 +338,60 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		}
 		if len(s.requests) != 2 {
 			return fmt.Errorf("expected two membership searches")
+		}
+		return nil
+	})
+
+	sc.Step(`^cancellation is rejected$`, func() { cancelMode = "rejected" })
+	sc.Step(`^cancellation leaves membership unchanged$`, func() { cancelMode = "retained" })
+	sc.Step(`^cancellation verification is unavailable$`, func() { cancelMode = "unavailable" })
+	sc.Step(`^cancellation was attempted only once$`, func() error {
+		s := current()
+		if len(s.requests) != 1 || strings.Contains(s.stderr.String(), "test-session-secret") {
+			return fmt.Errorf("expected safe single cancellation attempt")
+		}
+		r := <-s.requests
+		if r.Method != "PATCH" {
+			return fmt.Errorf("expected cancellation")
+		}
+		return nil
+	})
+	sc.Step(`^cancellation was submitted once and checked twice$`, func() error {
+		s := current()
+		if len(s.requests) != 3 {
+			return fmt.Errorf("expected three requests")
+		}
+		for _, method := range []string{"PATCH", "GET", "GET"} {
+			r := <-s.requests
+			if r.Method != method {
+				return fmt.Errorf("unexpected cancellation sequence")
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^I am (attending|waitlisted) for a huddl$`, func(status string) { cancellationMembership = status })
+	sc.Step(`^I cancel my RSVP$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI([]string{"rsvp", "cancel", "11111111-1111-4111-8111-111111111111"}, "")
+	})
+	sc.Step(`^the backend confirms I am no longer attending or waitlisted$`, func() error {
+		s := current()
+		if !cancelled || s.stdout.String() != "RSVP cancelled for huddl 11111111-1111-4111-8111-111111111111. No confirmed or waitlisted membership remains.\n" || len(s.requests) != 3 {
+			return fmt.Errorf("expected verified cancellation")
+		}
+		r := <-s.requests
+		if r.Method != "PATCH" {
+			return fmt.Errorf("expected cancellation first")
+		}
+		for _, status := range []string{"attending", "waitlisted"} {
+			r := <-s.requests
+			if r.Method != "GET" || r.URL.Query().Get("relationship") != status {
+				return fmt.Errorf("expected both membership checks")
+			}
 		}
 		return nil
 	})
