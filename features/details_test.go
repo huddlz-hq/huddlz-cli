@@ -3,6 +3,7 @@ package features_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,32 @@ import (
 
 func registerDetails(sc *godog.ScenarioContext, current func() *searchScenario, binary, home string) {
 	var undisclosed bool
+	sc.Step(`^the huddl lookup returns HTTP (\d+)$`, func(status int) {
+		s := current()
+		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			s.requests <- r.Clone(context.Background())
+			w.WriteHeader(status)
+			fmt.Fprint(w, `{"errors":[{"detail":"Protected title and private address"}]}`)
+		}))
+	})
+	sc.Step(`^the huddl is reported unavailable without disclosing details$`, func() error {
+		s := current()
+		if s.exitCode != 1 || s.stdout.Len() != 0 || s.stderr.String() != "Huddl unavailable: it does not exist or is not visible to you.\n" {
+			return fmt.Errorf("expected unavailable result, got exit=%d stdout=%q stderr=%q", s.exitCode, s.stdout.String(), s.stderr.String())
+		}
+		return nil
+	})
+	sc.Step(`^no alternate huddl lookup is attempted$`, func() error {
+		s := current()
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected one lookup, got %d", len(s.requests))
+		}
+		r := <-s.requests
+		if r.Method != "GET" || r.URL.Path != "/api/json/huddlz/11111111-1111-4111-8111-111111111111" || r.URL.RawQuery != "" {
+			return fmt.Errorf("unexpected lookup: %v", r)
+		}
+		return nil
+	})
 	sc.Step(`^its optional details are undisclosed$`, func() { undisclosed = true })
 	sc.Step(`^missing details are reported honestly$`, func() error {
 		s := current()
@@ -52,7 +79,13 @@ func registerDetails(sc *godog.ScenarioContext, current func() *searchScenario, 
 		cmd := exec.CommandContext(ctx, binary, "show", "11111111-1111-4111-8111-111111111111")
 		cmd.Env = []string{"HUDDLZ_URL=" + s.server.URL, "HOME=" + home, "PATH=" + os.Getenv("PATH")}
 		cmd.Stdout, cmd.Stderr = &s.stdout, &s.stderr
-		return cmd.Run()
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			s.exitCode = exitErr.ExitCode()
+			return nil
+		}
+		return err
 	})
 	sc.Step(`^I see its public details and availability limits$`, func() error {
 		s := current()
@@ -61,7 +94,7 @@ func registerDetails(sc *godog.ScenarioContext, current func() *searchScenario, 
 				return fmt.Errorf("missing %q in %s", value, s.stdout.String())
 			}
 		}
-		if s.stderr.Len() != 0 {
+		if s.exitCode != 0 || s.stderr.Len() != 0 {
 			return fmt.Errorf("unexpected stderr: %s", s.stderr.String())
 		}
 		select {

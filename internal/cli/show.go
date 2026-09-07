@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -30,7 +32,12 @@ func show(args []string, stdout, stderr io.Writer) int {
 	endpoint = endpoint.JoinPath(args[0])
 	body, err := getJSONAPI(endpoint)
 	if err != nil {
-		fmt.Fprintln(stderr, "Huddl lookup failed:", err)
+		var status httpStatusError
+		if errors.As(err, &status) && (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound) {
+			fmt.Fprintln(stderr, "Huddl unavailable: it does not exist or is not visible to you.")
+		} else {
+			fmt.Fprintln(stderr, "Huddl lookup failed:", err)
+		}
 		return 1
 	}
 	var document struct {

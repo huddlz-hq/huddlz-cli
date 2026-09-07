@@ -193,3 +193,8 @@ The current JSON:API detail schema does not expose RSVP counts or remaining seat
 Virtual meeting links are undisclosed to this anonymous lookup (the API has a
 protected `visible_virtual_link` field for authorized users). The CLI identifies these limitations explicitly;
 a published state or attendance limit does not promise an available seat.
+
+A missing or inaccessible huddl produces the same “Huddl unavailable” diagnostic
+on stderr and exits with status 1, leaving stdout empty. The CLI does not expose
+API error bodies or try alternate lookups to determine whether a hidden huddl
+exists. Server outages remain lookup errors rather than unavailable results.

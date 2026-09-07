@@ -38,7 +38,7 @@ func getJSONAPI(endpoint *url.URL) ([]byte, error) {
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d %s", response.StatusCode, http.StatusText(response.StatusCode))
+		return nil, httpStatusError(response.StatusCode)
 	}
 	const maxResponseBytes = 4 << 20
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
@@ -46,4 +46,11 @@ func getJSONAPI(endpoint *url.URL) ([]byte, error) {
 		return nil, fmt.Errorf("invalid or oversized JSON:API response")
 	}
 	return body, nil
+}
+
+// httpStatusError retains the status without exposing a server error body.
+type httpStatusError int
+
+func (status httpStatusError) Error() string {
+	return fmt.Sprintf("HTTP %d %s", status, http.StatusText(int(status)))
 }
