@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -32,19 +30,11 @@ func search(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, searchHelp)
 		return 2
 	}
-	base := os.Getenv("HUDDLZ_URL")
-	if base == "" {
-		base = "https://huddlz.com"
-	}
-	endpoint, err := url.Parse(base)
-	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "https" && endpoint.Scheme != "http") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
-		fmt.Fprintln(stderr, "HUDDLZ_URL must be an HTTP(S) server URL without credentials, query, or fragment.")
+	endpoint, err := huddlEndpoint()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
-	if endpoint.Path == "" {
-		endpoint.Path = "/"
-	}
-	endpoint = endpoint.JoinPath("api/json/huddlz")
 	params := url.Values{"date_filter": {options.date}, "search_time_zone": {options.timeZone}, "sort": {"starts_at"}, "page[limit]": {strconv.Itoa(options.limit)}, "page[offset]": {strconv.Itoa(options.offset)}}
 	if options.query != "" {
 		params.Set("query", options.query)
@@ -58,21 +48,14 @@ func search(args []string, stdout, stderr io.Writer) int {
 		params.Set("distance_miles", strconv.Itoa(location.radius))
 	}
 	endpoint.RawQuery = params.Encode()
-	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
+	body, err := getJSONAPI(endpoint)
 	if err != nil {
-		fmt.Fprintln(stderr, "Could not create search request:", err)
-		return 1
-	}
-	request.Header.Set("Accept", "application/vnd.api+json")
-	client := &http.Client{Timeout: 15 * time.Second}
-	response, err := client.Do(request)
-	if err != nil {
-		fmt.Fprintln(stderr, "Search request failed:", err)
-		return 1
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		fmt.Fprintf(stderr, "Search failed: HTTP %d %s\n", response.StatusCode, http.StatusText(response.StatusCode))
+		var requestErr *url.Error
+		if errors.As(err, &requestErr) {
+			fmt.Fprintln(stderr, "Search request failed:", err)
+		} else {
+			fmt.Fprintln(stderr, "Search failed:", err)
+		}
 		return 1
 	}
 	var document struct {
@@ -89,9 +72,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 			} `json:"attributes"`
 		} `json:"data"`
 	}
-	const maxResponseBytes = 4 << 20
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(body) > maxResponseBytes || json.Unmarshal(body, &document) != nil || document.Data == nil {
+	if json.Unmarshal(body, &document) != nil || document.Data == nil {
 		fmt.Fprintln(stderr, "Search failed: invalid or oversized JSON:API response.")
 		return 1
 	}

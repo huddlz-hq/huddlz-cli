@@ -31,9 +31,10 @@ func TestFeatures(t *testing.T) {
 	}
 	suite := godog.TestSuite{
 		Name:    "huddlz",
-		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature", "location.feature"}, TestingT: t, Strict: true},
+		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature", "location.feature", "details.feature"}, TestingT: t, Strict: true},
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			var state *searchScenario
+			registerDetails(sc, func() *searchScenario { return state }, binary, t.TempDir())
 			registerPagination(sc, func() *searchScenario { return state }, binary, t.TempDir())
 			sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 				state = &searchScenario{requests: make(chan *http.Request, 10)}

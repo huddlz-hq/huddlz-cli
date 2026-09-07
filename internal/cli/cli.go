@@ -10,6 +10,7 @@ import (
 const help = `huddlz — a CLI for humans and agents
 
 Usage:
+  huddlz show <id>
   huddlz help
   huddlz version [--json]
   huddlz search [<query>] [--date <filter>] [--type <type>] [--time-zone <zone>]
@@ -21,7 +22,7 @@ Options:
 Search shows one page as a table, defaulting to 20 upcoming huddlz.
 Run 'huddlz search --help' for supported filters and options.
 Set HUDDLZ_URL to override the default server, https://huddlz.com.
-Location filters, search JSON output, details, RSVP, and login are planned.
+Search JSON output, RSVP, and login are planned.
 `
 
 // Run executes a command. Exit codes are 0 for success, 1 for execution
@@ -29,6 +30,8 @@ Location filters, search JSON output, details, RSVP, and login are planned.
 func Run(args []string, stdout, stderr io.Writer, version string) int {
 	var err error
 	switch {
+	case len(args) > 0 && args[0] == "show":
+		return show(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "search":
 		return search(args[1:], stdout, stderr)
 	case len(args) == 0 || len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h"):

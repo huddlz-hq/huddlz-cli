@@ -127,7 +127,6 @@ Planned additions (not implemented):
 | Command | Purpose |
 | --- | --- |
 | Address lookup and profile defaults | Choose search locations without coordinates |
-| `huddlz show <id>` | Look up a single huddl |
 | `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |
 | `huddlz auth login` | Authenticate |
@@ -178,3 +177,19 @@ have full user permissions, so scoped agent keys are a backend follow-up.
    tied to that origin.
 3. RSVP and cancellation, including full-capacity and waitlist behavior.
 4. Cross-platform release builds and installation instructions.
+
+### Inspect a huddl
+
+```sh
+huddlz show <id>
+```
+
+Use an ID from search to read a public huddl's description, start and end times,
+calendar time zone, event type, location, lifecycle state, and attendance limit.
+Timestamps retain the API's offsets. Missing optional details are marked as not
+disclosed; a missing attendance limit is shown as not specified.
+
+The current JSON:API detail schema does not expose RSVP counts or remaining seats.
+Virtual meeting links are undisclosed to this anonymous lookup (the API has a
+protected `visible_virtual_link` field for authorized users). The CLI identifies these limitations explicitly;
+a published state or attendance limit does not promise an available seat.
