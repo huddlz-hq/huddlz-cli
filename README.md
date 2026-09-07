@@ -6,12 +6,14 @@ This is an early CLI with help, version, and one public search slice. Credential
 and profile preferences are not implemented yet.
 
 ```sh
+huddlz search
 huddlz search --anywhere "board games"
 ```
 
 Search requests the first 20 upcoming matches, ordered soonest first, and prints
 a table. It uses `https://huddlz.com`; set `HUDDLZ_URL` to use another server.
-For this initial slice, `--anywhere` is required before the quoted query. Search
+Omit the query to browse. Anonymous search is unrestricted geographically and
+prints that scope explicitly. For text search, put `--anywhere` before the quoted query. Search
 JSON output, additional filters, and fetching subsequent pages remain planned.
 
 ## Development
@@ -27,23 +29,26 @@ go test ./...
 go vet ./...
 ```
 
-## Cucumber trial
+## Acceptance scenarios
 
-Run the executable search scenario with:
+Run the executable search scenarios with:
 
 ```sh
 go test ./features -run TestFeatures -v -count=1
 ```
 
-`features/search.feature` describes anonymous search by interest. Godog builds
-and runs the actual CLI against an isolated local HTTP server. The scenario
-checks query encoding, upcoming ordering, the page limit, absence of credentials,
-readable results, stderr, and exit status. It requires permission to listen on
-loopback, but does not contact production or require a huddlz account.
+`features/search.feature` covers anonymous browsing, search by interest, no
+matches, and API failures. Godog builds and runs the actual CLI against an
+isolated local HTTP server. Scenarios check query encoding, upcoming ordering,
+the page limit, absence of credentials, readable results, stderr, and exit
+status. HTTP errors, disconnected responses, and malformed JSON:API responses
+are distinct from successful empty results. Tests require permission to listen
+on loopback, but do not contact production or require a huddlz account.
 
 The fixture represents the JSON:API contract; it does not prove the backend's
-search/filtering behavior. The scenario was observed failing before search was
-implemented and passing afterward. Other search paths are not yet covered.
+search/filtering behavior. Search and browse scenarios were observed failing
+before implementation and passing afterward. The empty and failure scenarios
+exercise handling already present in the initial search slice.
 
 Godog runs through `go test` and reports failures by Gherkin step. Step registration,
 scenario state, and assertions are explicit Go code. No assertion library is
@@ -55,8 +60,8 @@ For a versioned build:
 go build -ldflags '-X main.version=0.1.0' -o bin/huddlz ./cmd/huddlz
 ```
 
-The module path assumes the future repository will be
-`github.com/huddlz-hq/huddlz-cli`; update it and imports if a different name is chosen.
+Scenario tickets and dependencies are tracked in
+[GitHub Issues](https://github.com/huddlz-hq/huddlz-cli/issues).
 
 ## Initial direction
 
@@ -64,15 +69,15 @@ Go produces a standalone executable and provides HTTP, JSON, and testing in its
 standard library. Keep the entry point small and command behavior in `internal/cli`.
 Add API and credential packages when the first commands need them.
 
-Planned commands (not implemented):
+Planned additions (not implemented):
 
 | Command | Purpose |
 | --- | --- |
-| `huddlz search [query]` | Discover public huddlz with filters and pagination |
+| Search filters and pagination | Refine discovery and fetch subsequent pages |
 | `huddlz show <id>` | Look up a single huddl |
 | `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |
-| `huddlz auth login` | Sign in as a human |
+| `huddlz auth login` | Authenticate |
 | `huddlz auth status` | Check the current identity |
 | `huddlz auth logout` | End the local session and handle server revocation |
 
@@ -81,7 +86,7 @@ Command conventions:
 - Readable text by default; explicit `--json` for structured output.
 - Results on stdout and diagnostics on stderr.
 - Exit code 0 for success, 1 for execution failure, and 2 for invalid usage.
-- Agent commands must work without interactive prompts when inputs are supplied.
+- All commands must work without interactive prompts when inputs are supplied.
 - Anonymous discovery must work without login.
 - Support an environment-supplied API key for agents. Do not accept passwords
   through command-line arguments or print credentials.
@@ -119,5 +124,4 @@ have full user permissions, so scoped agent keys are a backend follow-up.
 2. Authentication and identity, with an explicit backend URL and credentials
    tied to that origin.
 3. RSVP and cancellation, including full-capacity and waitlist behavior.
-4. Cross-platform release builds and installation instructions once the GitHub
-   repository exists.
+4. Cross-platform release builds and installation instructions.

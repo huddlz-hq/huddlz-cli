@@ -12,7 +12,7 @@ const help = `huddlz — a CLI for humans and agents
 Usage:
   huddlz help
   huddlz version [--json]
-  huddlz search --anywhere <query>
+  huddlz search [--anywhere [<query>]]
 
 Options:
   -h, --help     Show help

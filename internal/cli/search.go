@@ -13,10 +13,16 @@ import (
 	"unicode"
 )
 
-// This first slice deliberately requires an explicit geographic scope.
+// Anonymous searches have no profile defaults, so their scope is everywhere.
 func search(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 2 || args[0] != "--anywhere" || strings.TrimSpace(args[1]) == "" {
-		fmt.Fprintln(stderr, "Usage: huddlz search --anywhere <query>")
+	query := ""
+	switch {
+	case len(args) == 0:
+	case len(args) == 1 && args[0] == "--anywhere":
+	case len(args) == 2 && args[0] == "--anywhere" && strings.TrimSpace(args[1]) != "":
+		query = args[1]
+	default:
+		fmt.Fprintln(stderr, "Usage: huddlz search [--anywhere [<query>]]")
 		return 2
 	}
 	base := os.Getenv("HUDDLZ_URL")
@@ -29,7 +35,11 @@ func search(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	endpoint = endpoint.JoinPath("api/json/huddlz")
-	endpoint.RawQuery = url.Values{"query": {args[1]}, "date_filter": {"upcoming"}, "sort": {"starts_at"}, "page[limit]": {"20"}}.Encode()
+	params := url.Values{"date_filter": {"upcoming"}, "sort": {"starts_at"}, "page[limit]": {"20"}}
+	if query != "" {
+		params.Set("query", query)
+	}
+	endpoint.RawQuery = params.Encode()
 	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		fmt.Fprintln(stderr, "Could not create search request:", err)
@@ -50,6 +60,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 	var document struct {
 		Data *[]struct {
 			ID         string `json:"id"`
+			Type       string `json:"type"`
 			Attributes struct {
 				Title            string `json:"title"`
 				StartsAt         string `json:"starts_at"`
@@ -62,6 +73,13 @@ func search(args []string, stdout, stderr io.Writer) int {
 	if err != nil || len(body) > maxResponseBytes || json.Unmarshal(body, &document) != nil || document.Data == nil {
 		fmt.Fprintln(stderr, "Search failed: invalid or oversized JSON:API response.")
 		return 1
+	}
+	for _, huddl := range *document.Data {
+		_, dateErr := time.Parse(time.RFC3339, huddl.Attributes.StartsAt)
+		if huddl.Type != "huddl" || strings.TrimSpace(huddl.ID) == "" || strings.TrimSpace(huddl.Attributes.Title) == "" || dateErr != nil {
+			fmt.Fprintln(stderr, "Search failed: invalid or oversized JSON:API response.")
+			return 1
+		}
 	}
 	var output strings.Builder
 	fmt.Fprintln(&output, "Searching everywhere · upcoming · up to 20 results")
