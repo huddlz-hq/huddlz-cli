@@ -10,14 +10,18 @@ huddlz search
 huddlz search --anywhere "board games"
 huddlz search "board games" --date this_week --type in_person --time-zone America/New_York
 huddlz search "board games" --limit 10 --offset 10
+huddlz search "board games" --lat 40.7128 --lng -74.006 --radius 25
 ```
 
 Search requests one page of up to 20 matches by default, ordered by start time
 ascending, and prints a table. It defaults to upcoming huddlz and uses `https://huddlz.com`; set
 `HUDDLZ_URL` to use another server.
-Omit the query to browse. Anonymous search is unrestricted geographically and
-prints that scope explicitly. Options may appear before or after the quoted
-query. `--anywhere` also explicitly selects that geographic scope.
+Omit the query to browse. Without coordinates, anonymous search is unrestricted
+geographically and prints that scope explicitly. Options may appear before or
+after the quoted query. `--anywhere` explicitly selects unrestricted search.
+Provide `--lat` and `--lng` together to search near a chosen point; coordinates
+of zero are valid. The radius defaults to 25 miles. This applies only to the
+current search and does not save a location or change profile preferences.
 
 | Option | Accepted values | Default |
 | --- | --- | --- |
@@ -26,6 +30,9 @@ query. `--anywhere` also explicitly selects that geographic scope.
 | `--time-zone` | Canonical IANA name, such as `America/New_York` or `Etc/UTC` | `Etc/UTC` |
 | `--limit` | Integer from 1 through 100 | `20` |
 | `--offset` | Nonnegative integer | `0` |
+| `--lat` | Latitude from -90 through 90; requires `--lng` | None |
+| `--lng` | Longitude from -180 through 180; requires `--lat` | None |
+| `--radius` | Integer from 5 through 100 miles | `25` with coordinates |
 
 The chosen calendar timezone is sent to the server and shown in the search
 scope. `UTC` is accepted as shorthand for `Etc/UTC`. The API determines calendar
@@ -35,7 +42,7 @@ date/type values and noncanonical timezones fail before a request is sent.
 Aliases such as `US/Eastern` are rejected; use `America/New_York` instead.
 
 When the API reports another page, output includes a `Next page:` command with
-the current query, filters, and page size preserved. Copy it into a POSIX shell
+the current query, filters, coordinates, radius, and page size preserved. Copy it into a POSIX shell
 (such as bash or zsh) while retaining the same `HUDDLZ_URL` environment setting.
 Each invocation fetches just one page. You can also repeat the search with an
 explicit `--offset`; it counts results to skip, not page numbers.
@@ -46,7 +53,7 @@ from the number of results. Invalid continuation links and responses exceeding
 the requested limit fail without printing successful results. Offset pagination
 is not a snapshot: changes to matching huddlz between requests can move results.
 
-Search JSON output and geographic filters remain planned.
+Search JSON output, address lookup, and profile-based defaults remain planned.
 
 ## Development
 
@@ -75,6 +82,9 @@ go test ./features -run TestFeatures -v -count=1
 `features/pagination.feature` follows the printed next-page command through a
 POSIX shell and checks that filters and literal query text survive. It also
 covers page bounds and end-of-results states.
+
+`features/location.feature` checks explicit coordinate search, valid zero and
+boundary coordinates, and preservation of geographic filters across pages.
 
 `features/search.feature` covers anonymous browsing, search by interest, combined
 date/type filters, invalid inputs, no matches, and API failures. Godog builds and runs the actual CLI against an
@@ -112,7 +122,7 @@ Planned additions (not implemented):
 
 | Command | Purpose |
 | --- | --- |
-| Geographic search filters | Refine discovery around a chosen location |
+| Address lookup and profile defaults | Choose search locations without coordinates |
 | `huddlz show <id>` | Look up a single huddl |
 | `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |

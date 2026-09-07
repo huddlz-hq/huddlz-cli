@@ -43,6 +43,9 @@ func nextPageMessage(next json.RawMessage, options searchOptions, endpoint *url.
 		return "", fmt.Errorf("next-page offset must advance the search")
 	}
 	command := "huddlz search --anywhere"
+	if location := options.location; location != nil {
+		command = fmt.Sprintf("huddlz search --lat %g --lng %g --radius %d", location.latitude, location.longitude, location.radius)
+	}
 	command += " --date " + options.date
 	if options.kind != "" {
 		command += " --type " + options.kind

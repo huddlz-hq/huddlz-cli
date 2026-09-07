@@ -31,7 +31,7 @@ func TestFeatures(t *testing.T) {
 	}
 	suite := godog.TestSuite{
 		Name:    "huddlz",
-		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature"}, TestingT: t, Strict: true},
+		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature", "location.feature"}, TestingT: t, Strict: true},
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			var state *searchScenario
 			registerPagination(sc, func() *searchScenario { return state }, binary, t.TempDir())
@@ -167,7 +167,7 @@ func TestFeatures(t *testing.T) {
 					return fmt.Errorf("expected scope, header, and two rows separated by a blank line; got:\n%s", state.stdout.String())
 				}
 				for i, cells := range map[int][]string{
-					0: {"Searching everywhere"},
+					0: {"Searching"},
 					2: {"ID", "TITLE", "STARTS AT", "LOCATION"},
 					3: {"11111111-1111-4111-8111-111111111111", "Board games at the library", "2027-01-10T18:00:00Z", "Central Library"},
 					4: {"22222222-2222-4222-8222-222222222222", "Sunday board games", "2027-01-17T14:00:00Z", "Community Center"},
@@ -183,6 +183,19 @@ func TestFeatures(t *testing.T) {
 			sc.Step(`^the command succeeds$`, func() error {
 				if state.exitCode != 0 || state.stderr.Len() != 0 {
 					return fmt.Errorf("exit=%d, stderr=%q", state.exitCode, state.stderr.String())
+				}
+				return nil
+			})
+			sc.Step(`^the output describes a search near "([^"]*)", "([^"]*)" within "([^"]*)" miles$`, func(lat, lng, radius string) error {
+				want := fmt.Sprintf("Searching within %s miles of %s, %s", radius, lat, lng)
+				if !strings.HasPrefix(state.stdout.String(), want) {
+					return fmt.Errorf("expected location scope %q, got %q", want, state.stdout.String())
+				}
+				return nil
+			})
+			sc.Step(`^no profile update is requested$`, func() error {
+				if len(state.requests) != 0 {
+					return fmt.Errorf("unexpected additional API requests after the search")
 				}
 				return nil
 			})

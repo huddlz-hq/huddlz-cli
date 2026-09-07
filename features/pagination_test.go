@@ -17,6 +17,7 @@ import (
 
 func registerPagination(sc *godog.ScenarioContext, current func() *searchScenario, binary, home string) {
 	var query string
+	var nearby bool
 	var commands []string
 	sc.Step(`^the public API has an empty final page$`, func() {
 		state := current()
@@ -66,9 +67,14 @@ func registerPagination(sc *godog.ScenarioContext, current func() *searchScenari
 		}
 		return nil
 	}
-	sc.Step(`^I search the first page for "([^"]*)" with filters$`, func(input string) error {
+	sc.Step(`^I search the first page for "([^"]*)" with (nearby )?filters$`, func(input, location string) error {
 		query = input
-		return run([]string{"search", "--date", "this_week", "--type", "in_person", "--time-zone", "America/New_York", "--limit", "1", "--", query}, false)
+		nearby = location != ""
+		args := []string{"search", "--date", "this_week", "--type", "in_person", "--time-zone", "America/New_York", "--limit", "1"}
+		if nearby {
+			args = append(args, "--lat", "0", "--lng", "0")
+		}
+		return run(append(args, "--", query), false)
 	})
 	sc.Step(`^I see the first matching huddl and a next-page command$`, func() error {
 		output := current().stdout.String()
@@ -107,6 +113,9 @@ func registerPagination(sc *godog.ScenarioContext, current func() *searchScenari
 		}
 		for _, offset := range []string{"0", "1"} {
 			expected := map[string]string{"query": query, "date_filter": "this_week", "event_type": "in_person", "search_time_zone": "America/New_York", "sort": "starts_at", "page[limit]": "1", "page[offset]": offset}
+			if nearby {
+				expected["search_latitude"], expected["search_longitude"], expected["distance_miles"] = "0", "0", "25"
+			}
 			if err := state.expectSearch(expected); err != nil {
 				return err
 			}

@@ -52,6 +52,11 @@ func search(args []string, stdout, stderr io.Writer) int {
 	if options.kind != "" {
 		params.Set("event_type", options.kind)
 	}
+	if location := options.location; location != nil {
+		params.Set("search_latitude", fmt.Sprint(location.latitude))
+		params.Set("search_longitude", fmt.Sprint(location.longitude))
+		params.Set("distance_miles", strconv.Itoa(location.radius))
+	}
 	endpoint.RawQuery = params.Encode()
 	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
@@ -111,7 +116,11 @@ func search(args []string, stdout, stderr io.Writer) int {
 	if kind == "" {
 		kind = "all types"
 	}
-	fmt.Fprintf(&output, "Searching everywhere · %s · %s · calendar timezone: %s · up to %d results · offset %d\n", options.date, kind, options.timeZone, options.limit, options.offset)
+	scope := "Searching everywhere"
+	if location := options.location; location != nil {
+		scope = fmt.Sprintf("Searching within %d miles of %g, %g", location.radius, location.latitude, location.longitude)
+	}
+	fmt.Fprintf(&output, "%s · %s · %s · calendar timezone: %s · up to %d results · offset %d\n", scope, options.date, kind, options.timeZone, options.limit, options.offset)
 	fmt.Fprintln(&output)
 	if len(*document.Data) == 0 {
 		fmt.Fprintln(&output, "No matching huddlz.")
