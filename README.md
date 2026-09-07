@@ -22,6 +22,9 @@ after the quoted query. `--anywhere` explicitly selects unrestricted search.
 Provide `--lat` and `--lng` together to search near a chosen point; coordinates
 of zero are valid. The radius defaults to 25 miles. This applies only to the
 current search and does not save a location or change profile preferences.
+Incomplete coordinate pairs, non-finite or out-of-range coordinates, and invalid
+radii fail before any API request. `--radius` requires coordinates, and
+`--anywhere` cannot be combined with coordinates or a radius.
 
 | Option | Accepted values | Default |
 | --- | --- | --- |
@@ -85,6 +88,7 @@ covers page bounds and end-of-results states.
 
 `features/location.feature` checks explicit coordinate search, valid zero and
 boundary coordinates, and preservation of geographic filters across pages.
+It also checks that invalid or contradictory location inputs never reach the API.
 
 `features/search.feature` covers anonymous browsing, search by interest, combined
 date/type filters, invalid inputs, no matches, and API failures. Godog builds and runs the actual CLI against an

@@ -37,3 +37,49 @@ Feature: Search near a chosen location
     Then I see the second matching huddl
     And both requests preserve the query and filters
     And I am told there are no more results
+
+  Scenario Outline: Reject incomplete location input
+    Given the public API has upcoming board game huddlz
+    When I search with "<option>" set to "<value>"
+    Then the command rejects "<option>" without searching
+
+    Examples:
+      | option   | value |
+      | --lat    | 40    |
+      | --lng    | -74   |
+      | --radius | 25    |
+
+  Scenario Outline: Reject invalid coordinates and radii
+    Given the public API has upcoming board game huddlz
+    When I search with these arguments:
+      | --lat    |
+      | <lat>    |
+      | --lng    |
+      | <lng>    |
+      | --radius |
+      | <radius> |
+    Then the command rejects "<option>" without searching
+
+    Examples:
+      | lat  | lng  | radius | option   |
+      | 91   | 0    | 25     | --lat    |
+      | -91  | 0    | 25     | --lat    |
+      | NaN  | 0    | 25     | --lat    |
+      | +Inf | 0    | 25     | --lat    |
+      | 0    | 181  | 25     | --lng    |
+      | 0    | -181 | 25     | --lng    |
+      | 0    | NaN  | 25     | --lng    |
+      | 0    | -Inf | 25     | --lng    |
+      | 0    | 0    | 4      | --radius |
+      | 0    | 0    | 101    | --radius |
+      | 0    | 0    | 5.5    | --radius |
+
+  Scenario: Reject contradictory geographic scopes
+    Given the public API has upcoming board game huddlz
+    When I search with these arguments:
+      | --anywhere |
+      | --lat      |
+      | 0          |
+      | --lng      |
+      | 0          |
+    Then the command rejects "--anywhere" without searching

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -45,9 +46,10 @@ type searchLocation struct {
 func parseSearchOptions(args []string) (searchOptions, error) {
 	var options searchOptions
 	var location searchLocation
+	var anywhere bool
 	flags := pflag.NewFlagSet("search", pflag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	flags.Bool("anywhere", false, "Search without a geographic restriction")
+	flags.BoolVar(&anywhere, "anywhere", false, "Search without a geographic restriction")
 	flags.Float64Var(&location.latitude, "lat", 0, "Search latitude")
 	flags.Float64Var(&location.longitude, "lng", 0, "Search longitude")
 	flags.IntVar(&location.radius, "radius", 25, "Search radius in miles")
@@ -63,7 +65,26 @@ func parseSearchOptions(args []string) (searchOptions, error) {
 		return options, fmt.Errorf("supply at most one nonempty query; quote multiword searches")
 	}
 	options.query = flags.Arg(0)
-	if flags.Changed("lat") && flags.Changed("lng") {
+	latSet, lngSet := flags.Changed("lat"), flags.Changed("lng")
+	if anywhere && (latSet || lngSet || flags.Changed("radius")) {
+		return options, fmt.Errorf("--anywhere cannot be combined with --lat, --lng, or --radius")
+	}
+	if latSet != lngSet {
+		return options, fmt.Errorf("--lat and --lng must be supplied together")
+	}
+	if flags.Changed("radius") && !latSet {
+		return options, fmt.Errorf("--radius requires both --lat and --lng")
+	}
+	if latSet {
+		if math.IsNaN(location.latitude) || math.IsInf(location.latitude, 0) || location.latitude < -90 || location.latitude > 90 {
+			return options, fmt.Errorf("--lat must be a finite number between -90 and 90")
+		}
+		if math.IsNaN(location.longitude) || math.IsInf(location.longitude, 0) || location.longitude < -180 || location.longitude > 180 {
+			return options, fmt.Errorf("--lng must be a finite number between -180 and 180")
+		}
+		if location.radius < 5 || location.radius > 100 {
+			return options, fmt.Errorf("--radius must be an integer between 5 and 100 miles")
+		}
 		options.location = &location
 	}
 	if options.limit < 1 || options.limit > 100 {
