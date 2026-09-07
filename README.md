@@ -2,12 +2,22 @@
 
 A command-line client for humans and agents to discover huddlz and manage RSVPs.
 
-This is the initial scaffold. Only help and version work; no backend requests
-or credential storage are implemented yet.
+This is an early CLI with help, version, and one public search slice. Credentials
+and profile preferences are not implemented yet.
+
+```sh
+huddlz search --anywhere "board games"
+```
+
+Search requests the first 20 upcoming matches, ordered soonest first, and prints
+a table. It uses `https://huddlz.com`; set `HUDDLZ_URL` to use another server.
+For this initial slice, `--anywhere` is required before the quoted query. Search
+JSON output, additional filters, and fetching subsequent pages remain planned.
 
 ## Development
 
-Requires Go 1.26 or later. The scaffold uses only the standard library.
+Requires Go 1.26 or later. The executable uses only the standard library;
+acceptance tests use Godog.
 
 ```sh
 go run ./cmd/huddlz help
@@ -16,6 +26,28 @@ go build -o bin/huddlz ./cmd/huddlz
 go test ./...
 go vet ./...
 ```
+
+## Cucumber trial
+
+Run the executable search scenario with:
+
+```sh
+go test ./features -run TestFeatures -v -count=1
+```
+
+`features/search.feature` describes anonymous search by interest. Godog builds
+and runs the actual CLI against an isolated local HTTP server. The scenario
+checks query encoding, upcoming ordering, the page limit, absence of credentials,
+readable results, stderr, and exit status. It requires permission to listen on
+loopback, but does not contact production or require a huddlz account.
+
+The fixture represents the JSON:API contract; it does not prove the backend's
+search/filtering behavior. The scenario was observed failing before search was
+implemented and passing afterward. Other search paths are not yet covered.
+
+Godog runs through `go test` and reports failures by Gherkin step. Step registration,
+scenario state, and assertions are explicit Go code. No assertion library is
+required, but one can be added if it improves diagnostics and readability.
 
 For a versioned build:
 

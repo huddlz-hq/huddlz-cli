@@ -12,13 +12,15 @@ const help = `huddlz — a CLI for humans and agents
 Usage:
   huddlz help
   huddlz version [--json]
+  huddlz search --anywhere <query>
 
 Options:
   -h, --help     Show help
   --version      Show version
 
-This initial scaffold supports help and version.
-Search, huddl details, RSVP, and authentication are planned.
+Search currently supports the first 20 upcoming matches, shown as a table.
+Set HUDDLZ_URL to override the default server, https://huddlz.com.
+Location filters, search JSON output, details, RSVP, and login are planned.
 `
 
 // Run executes a command. Exit codes are 0 for success, 1 for execution
@@ -26,6 +28,8 @@ Search, huddl details, RSVP, and authentication are planned.
 func Run(args []string, stdout, stderr io.Writer, version string) int {
 	var err error
 	switch {
+	case len(args) > 0 && args[0] == "search":
+		return search(args[1:], stdout, stderr)
 	case len(args) == 0 || len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h"):
 		_, err = io.WriteString(stdout, help)
 	case len(args) == 1 && (args[0] == "version" || args[0] == "--version"):
