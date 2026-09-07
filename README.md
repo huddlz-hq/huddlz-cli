@@ -290,3 +290,27 @@ or finds no confirmed attendance, the CLI reports uncertainty and exits 1. It
 does not automatically repeat the mutation or join a waitlist. Missing or rejected
 credentials fail without an interactive login prompt. Waitlist and cancellation
 commands are separate increments.
+
+### List my RSVPs
+
+```sh
+huddlz rsvp list
+huddlz rsvp list --status waitlisted --json
+```
+
+Lists currently visible huddlz across all dates, separated into `confirmed` and
+`waitlisted` groups. Each row includes the huddl ID, title, start timestamp, and
+physical location. The API applies the current user's membership filters;
+confirmed attendance excludes waitlisted entries.
+
+`--status` accepts `all` (default), `confirmed`, or `waitlisted`. `--limit` is
+1–100, default 20 **per selected status**, and `--offset` defaults to 0 for each
+selected status. Each group is sorted by start time and has its own next-page
+command. An `all` request makes two bounded reads; a status-specific request
+makes one. The two reads are not a single snapshot, so membership may change
+between them. An error in either read leaves stdout empty.
+
+JSON contains `groups`, each with `status`, `data` (the same huddl resource shape
+as search), and `pagination` (`known`, `limit`, `offset`, `next_offset`, and
+`next_command`). Continuation commands select just that group's status and
+preserve `--json`. Missing pagination metadata is distinguished from the last page.

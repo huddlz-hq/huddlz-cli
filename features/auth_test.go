@@ -24,6 +24,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var revocationFailure string
 	var rsvpStatus int
 	var attendanceConfirmed bool
+	var listMode, nextListCommand string
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -37,6 +38,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		revocationFailure = ""
 		rsvpStatus = http.StatusOK
 		attendanceConfirmed = true
+		listMode = ""
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
@@ -72,6 +74,36 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
 			case "/api/json/huddlz":
 				q := r.URL.Query()
+				if q.Get("filter[id][eq]") == "" {
+					if r.Method != "GET" || r.Header.Get("Authorization") != "Bearer test-session-secret" || q.Get("date_filter") != "all" || q.Get("sort") != "starts_at" || q.Get("page[limit]") != "20" || (q.Get("page[offset]") != "0" && q.Get("page[offset]") != "1") {
+						w.WriteHeader(400)
+						return
+					}
+					title, id := "Confirmed games", "11111111-1111-4111-8111-111111111111"
+					if q.Get("relationship") == "waitlisted" {
+						title, id = "Waitlisted games", "22222222-2222-4222-8222-222222222222"
+					} else if q.Get("relationship") != "attending" {
+						w.WriteHeader(400)
+						return
+					}
+
+					if listMode == "failed" && q.Get("relationship") == "waitlisted" {
+						w.WriteHeader(503)
+						return
+					}
+					if listMode == "empty" {
+						fmt.Fprint(w, `{"data":[],"links":{"next":null}}`)
+						return
+					}
+					next := "null"
+					if listMode == "next" && q.Get("relationship") == "waitlisted" && q.Get("page[offset]") == "0" {
+						next = `"?page[offset]=1"`
+					}
+					fmt.Fprintf(w, `{"data":[{"type":"huddl","id":%q,"attributes":{"title":%q,"starts_at":"2027-01-10T18:00:00Z","physical_location":"Central Library"}}],"links":{"next":%s}}`, id, title, next)
+
+					return
+				}
+
 				if r.Method != "GET" || r.Header.Get("Authorization") != "Bearer test-session-secret" || r.Header.Get("Accept") != "application/vnd.api+json" || q.Get("filter[id][eq]") != "11111111-1111-4111-8111-111111111111" || q.Get("relationship") != "attending" || q.Get("date_filter") != "all" || q.Get("page[limit]") != "1" {
 					w.WriteHeader(400)
 					return
@@ -168,6 +200,108 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 			if r.Method != method {
 				return fmt.Errorf("unexpected request sequence")
 			}
+		}
+		return nil
+	})
+
+	sc.Step(`^my RSVP list has another waitlisted page$`, func() { listMode = "next" })
+	sc.Step(`^my RSVP lists are empty$`, func() { listMode = "empty" })
+	sc.Step(`^the waitlisted lookup fails$`, func() { listMode = "failed" })
+	sc.Step(`^I list my RSVPs as JSON$`, func() error { return runCLI([]string{"rsvp", "list", "--json"}, "") })
+	sc.Step(`^JSON distinguishes membership and provides a waitlisted continuation$`, func() error {
+		var out struct {
+			Groups []struct {
+				Status string
+				Data   []struct {
+					ID         string
+					Attributes struct {
+						Title    string
+						StartsAt string `json:"starts_at"`
+					}
+				}
+				Pagination struct {
+					Known       bool
+					NextCommand *string `json:"next_command"`
+				}
+			}
+		}
+		if err := json.Unmarshal(current().stdout.Bytes(), &out); err != nil {
+			return err
+		}
+		if len(out.Groups) != 2 || out.Groups[0].Status != "confirmed" || out.Groups[1].Status != "waitlisted" || len(out.Groups[0].Data) != 1 || len(out.Groups[1].Data) != 1 || out.Groups[0].Data[0].Attributes.Title != "Confirmed games" || out.Groups[1].Data[0].Attributes.StartsAt != "2027-01-10T18:00:00Z" || out.Groups[0].Pagination.NextCommand != nil || out.Groups[1].Pagination.NextCommand == nil {
+			return fmt.Errorf("unexpected membership JSON")
+		}
+		nextListCommand = *out.Groups[1].Pagination.NextCommand
+		if nextListCommand != "huddlz rsvp list --status waitlisted --limit 20 --offset 1 --json" {
+			return fmt.Errorf("incorrect continuation")
+		}
+		return nil
+	})
+	sc.Step(`^I run the RSVP continuation command$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI(strings.Fields(nextListCommand)[1:], "")
+	})
+	sc.Step(`^the continuation lists only the next waitlisted page$`, func() error {
+		var out struct {
+			Groups []struct {
+				Status     string
+				Pagination struct {
+					Offset      int
+					Known       bool
+					NextCommand *string `json:"next_command"`
+				}
+			}
+		}
+		s := current()
+		if err := json.Unmarshal(s.stdout.Bytes(), &out); err != nil {
+			return err
+		}
+		if len(out.Groups) != 1 || out.Groups[0].Status != "waitlisted" || out.Groups[0].Pagination.Offset != 1 || !out.Groups[0].Pagination.Known || out.Groups[0].Pagination.NextCommand != nil || len(s.requests) != 1 {
+			return fmt.Errorf("unexpected continuation result")
+		}
+		r := <-s.requests
+		if r.URL.Query().Get("relationship") != "waitlisted" || r.URL.Query().Get("page[offset]") != "1" {
+			return fmt.Errorf("incorrect continuation request")
+		}
+		return nil
+	})
+	sc.Step(`^JSON contains empty membership groups$`, func() error {
+		var out struct {
+			Groups []struct{ Data json.RawMessage }
+		}
+		if err := json.Unmarshal(current().stdout.Bytes(), &out); err != nil {
+			return err
+		}
+		if len(out.Groups) != 2 {
+			return fmt.Errorf("expected two membership groups")
+		}
+		for _, g := range out.Groups {
+			if string(g.Data) != "[]" {
+				return fmt.Errorf("expected empty array")
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^I list my RSVPs$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI([]string{"rsvp", "list"}, "")
+	})
+	sc.Step(`^my RSVP list identifies confirmed and waitlisted huddlz$`, func() error {
+		s := current()
+		for _, value := range []string{"confirmed", "waitlisted", "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "Confirmed games", "Waitlisted games", "2027-01-10T18:00:00Z", "Central Library"} {
+			if !strings.Contains(s.stdout.String(), value) {
+				return fmt.Errorf("missing %q in list", value)
+			}
+		}
+		if len(s.requests) != 2 {
+			return fmt.Errorf("expected two membership searches")
 		}
 		return nil
 	})

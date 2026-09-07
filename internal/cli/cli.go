@@ -10,6 +10,7 @@ import (
 const help = `huddlz — a CLI for humans and agents
 
 Usage:
+  huddlz rsvp list [--status all|confirmed|waitlisted] [--json]
   huddlz rsvp <id>
   huddlz auth login --email <email> [--password-stdin]
   huddlz auth status

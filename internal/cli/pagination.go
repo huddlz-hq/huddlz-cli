@@ -27,8 +27,8 @@ func (page searchPage) message() string {
 }
 
 // nextPage reads server pagination metadata without following a server URL.
-func nextPage(next json.RawMessage, options searchOptions, endpoint *url.URL) (searchPage, error) {
-	page := searchPage{Limit: options.limit, Offset: options.offset}
+func readNextPage(next json.RawMessage, limit, currentOffset int, endpoint *url.URL) (searchPage, error) {
+	page := searchPage{Limit: limit, Offset: currentOffset}
 	if len(next) == 0 {
 		return page, nil
 	}
@@ -59,9 +59,20 @@ func nextPage(next json.RawMessage, options searchOptions, endpoint *url.URL) (s
 		return page, fmt.Errorf("invalid next-page offset")
 	}
 	offset, err := strconv.Atoi(params.Get("page[offset]"))
-	if err != nil || offset <= options.offset {
+	if err != nil || offset <= currentOffset {
 		return page, fmt.Errorf("next-page offset must advance the search")
 	}
+	page.Known = true
+	page.NextOffset = &offset
+	return page, nil
+}
+
+func nextPage(next json.RawMessage, options searchOptions, endpoint *url.URL) (searchPage, error) {
+	page, err := readNextPage(next, options.limit, options.offset, endpoint)
+	if err != nil || page.NextOffset == nil {
+		return page, err
+	}
+	offset := *page.NextOffset
 	command := "huddlz search --anywhere"
 	if location := options.location; location != nil {
 		command = fmt.Sprintf("huddlz search --lat %g --lng %g --radius %d", location.latitude, location.longitude, location.radius)

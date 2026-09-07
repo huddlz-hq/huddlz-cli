@@ -10,9 +10,12 @@ import (
 	"strings"
 )
 
-const rsvpHelp = "Usage: huddlz rsvp <id>\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
+const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
 
 func rsvp(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "list" {
+		return listRSVPs(args[1:], stdout, stderr)
+	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, rsvpHelp); err != nil {
 			return 1

@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"text/tabwriter"
-	"time"
 	"unicode"
 
 	"github.com/spf13/pflag"
@@ -69,8 +67,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	for _, huddl := range *document.Data {
-		_, dateErr := time.Parse(time.RFC3339, huddl.Attributes.StartsAt)
-		if huddl.Type != "huddl" || strings.TrimSpace(huddl.ID) == "" || strings.TrimSpace(huddl.Attributes.Title) == "" || dateErr != nil {
+		if !huddl.valid() {
 			fmt.Fprintln(stderr, "Search failed: invalid or oversized JSON:API response.")
 			return 1
 		}
@@ -110,12 +107,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 	if len(*document.Data) == 0 {
 		fmt.Fprintln(&output, "No matching huddlz.")
 	} else {
-		table := tabwriter.NewWriter(&output, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(table, "ID\tTITLE\tSTARTS AT\tLOCATION")
-		for _, huddl := range *document.Data {
-			fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", tableCell(huddl.ID), tableCell(huddl.Attributes.Title), tableCell(huddl.Attributes.StartsAt), tableCell(huddl.Attributes.PhysicalLocation))
-		}
-		table.Flush()
+		writeHuddlTable(&output, *document.Data)
 	}
 	fmt.Fprintln(&output)
 	fmt.Fprintln(&output, page.message())

@@ -31,7 +31,7 @@ func TestFeatures(t *testing.T) {
 	}
 	suite := godog.TestSuite{
 		Name:    "huddlz",
-		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature", "location.feature", "details.feature", "json.feature", "auth.feature", "rsvp.feature"}, TestingT: t, Strict: true},
+		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature", "location.feature", "details.feature", "json.feature", "auth.feature", "rsvp.feature", "rsvp_list.feature"}, TestingT: t, Strict: true},
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			var state *searchScenario
 			registerAuth(sc, func() *searchScenario { return state }, binary, t.TempDir())
