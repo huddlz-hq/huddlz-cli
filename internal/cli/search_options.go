@@ -16,6 +16,7 @@ var canonicalTimeZones string
 const searchHelp = `Usage: huddlz search [<query>] [options]
 
 Options:
+  --json              Return structured search output
   --anywhere          Search without a geographic restriction (current default)
   --lat <number>      Latitude of the search origin (requires --lng)
   --lng <number>      Longitude of the search origin (requires --lat)
@@ -33,6 +34,7 @@ Result timestamps retain the offsets returned by the server.
 `
 
 type searchOptions struct {
+	jsonOutput                  bool
 	query, date, kind, timeZone string
 	limit, offset               int
 	location                    *searchLocation
@@ -49,6 +51,7 @@ func parseSearchOptions(args []string) (searchOptions, error) {
 	var anywhere bool
 	flags := pflag.NewFlagSet("search", pflag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	flags.BoolVar(&options.jsonOutput, "json", false, "Return JSON")
 	flags.BoolVar(&anywhere, "anywhere", false, "Search without a geographic restriction")
 	flags.Float64Var(&location.latitude, "lat", 0, "Search latitude")
 	flags.Float64Var(&location.longitude, "lng", 0, "Search longitude")

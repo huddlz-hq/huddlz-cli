@@ -56,7 +56,7 @@ from the number of results. Invalid continuation links and responses exceeding
 the requested limit fail without printing successful results. Offset pagination
 is not a snapshot: changes to matching huddlz between requests can move results.
 
-Search JSON output, address lookup, and profile-based defaults remain planned.
+Address lookup and profile-based defaults remain planned.
 
 ## Development
 
@@ -198,3 +198,29 @@ A missing or inaccessible huddl produces the same “Huddl unavailable” diagno
 on stderr and exits with status 1, leaving stdout empty. The CLI does not expose
 API error bodies or try alternate lookups to determine whether a hidden huddl
 exists. Server outages remain lookup errors rather than unavailable results.
+
+### Structured search output
+
+```sh
+huddlz search "board games" --json
+```
+
+`--json` changes presentation only. Successful searches emit one JSON document
+and no diagnostics on stderr. Failures leave stdout empty and report errors on
+stderr with a nonzero exit status. Help remains readable text.
+
+The document contains:
+
+- `data`: an array (including `[]` for no matches) of resources with `id`, `type`,
+  and `attributes` containing `title`, `starts_at`, and `physical_location`.
+- `search`: `query`, `date`, `type` (empty string means all types), `time_zone`,
+  and `location` (`null` means everywhere; otherwise `latitude`, `longitude`,
+  and `radius_miles`).
+- `pagination`: `limit`, `offset`, `known`, `next_offset`, and `next_command`.
+  If `known` is false, the API supplied no pagination information. If true and
+  `next_offset` is null, there are no more results. A next command preserves
+  the filters and `--json`, using the same POSIX shell quoting as readable output.
+
+Strings retain their original values in JSON; table formatting does not alter
+structured data. This initial JSON convention covers search; `show` remains
+readable output for now.

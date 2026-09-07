@@ -62,15 +62,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 		Links struct {
 			Next json.RawMessage `json:"next"`
 		} `json:"links"`
-		Data *[]struct {
-			ID         string `json:"id"`
-			Type       string `json:"type"`
-			Attributes struct {
-				Title            string `json:"title"`
-				StartsAt         string `json:"starts_at"`
-				PhysicalLocation string `json:"physical_location"`
-			} `json:"attributes"`
-		} `json:"data"`
+		Data *[]searchHuddl `json:"data"`
 	}
 	if json.Unmarshal(body, &document) != nil || document.Data == nil {
 		fmt.Fprintln(stderr, "Search failed: invalid or oversized JSON:API response.")
@@ -87,10 +79,22 @@ func search(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "Search failed: API returned more results than requested.")
 		return 1
 	}
-	pageMessage, err := nextPageMessage(document.Links.Next, options, endpoint)
+	page, err := nextPage(document.Links.Next, options, endpoint)
 	if err != nil {
 		fmt.Fprintln(stderr, "Search failed:", err)
 		return 1
+	}
+	if options.jsonOutput {
+		var location *searchJSONLocation
+		if l := options.location; l != nil {
+			location = &searchJSONLocation{l.latitude, l.longitude, l.radius}
+		}
+		result := searchJSONResult{*document.Data, searchJSONContext{options.query, options.date, options.kind, options.timeZone, location}, page}
+		if err := json.NewEncoder(stdout).Encode(result); err != nil {
+			fmt.Fprintln(stderr, "Could not write output:", err)
+			return 1
+		}
+		return 0
 	}
 	var output strings.Builder
 	kind := options.kind
@@ -114,7 +118,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 		table.Flush()
 	}
 	fmt.Fprintln(&output)
-	fmt.Fprintln(&output, pageMessage)
+	fmt.Fprintln(&output, page.message())
 	if _, err := io.WriteString(stdout, output.String()); err != nil {
 		fmt.Fprintln(stderr, "Could not write output:", err)
 		return 1
@@ -129,4 +133,14 @@ func tableCell(value string) string {
 		}
 		return r
 	}, value)
+}
+
+type searchHuddl struct {
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Attributes struct {
+		Title            string `json:"title"`
+		StartsAt         string `json:"starts_at"`
+		PhysicalLocation string `json:"physical_location"`
+	} `json:"attributes"`
 }

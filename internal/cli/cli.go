@@ -22,7 +22,7 @@ Options:
 Search shows one page as a table, defaulting to 20 upcoming huddlz.
 Run 'huddlz search --help' for supported filters and options.
 Set HUDDLZ_URL to override the default server, https://huddlz.com.
-Search JSON output, RSVP, and login are planned.
+RSVP and login are planned.
 `
 
 // Run executes a command. Exit codes are 0 for success, 1 for execution
