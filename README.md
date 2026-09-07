@@ -127,7 +127,6 @@ Planned additions (not implemented):
 | Command | Purpose |
 | --- | --- |
 | Address lookup and profile defaults | Choose search locations without coordinates |
-| `huddlz rsvp <id>` | RSVP to a huddl |
 | `huddlz rsvp cancel <id>` | Cancel an RSVP |
 
 Command conventions:
@@ -245,8 +244,8 @@ stored unencrypted in mode-0600 files beneath the OS user configuration director
 The file name is a hash of the server URL. New session directories use mode 0700;
 saves replace the token atomically. The OS keychain is not used in this version.
 Authentication requires HTTPS except for loopback development servers and does
-not follow redirects. Search and show continue to use anonymous public reads;
-using authenticated sessions for attendance actions is the next increment.
+not follow redirects. Search and show continue to use anonymous public reads; RSVP uses the saved
+session for the selected server.
 
 Use `huddlz auth logout` to remove the saved session for the selected server and
 revoke its JWT through `DELETE /api/auth/sign_out`. Local removal happens first,
@@ -272,3 +271,22 @@ token, and never opens a login prompt automatically. The server may reject an
 expired or revoked token; the CLI does not claim to distinguish those causes.
 Other failures, such as HTTP 403 or 503, remain account-verification errors.
 Failed verification leaves the saved token unchanged.
+
+### RSVP
+
+```sh
+huddlz rsvp <id>
+```
+
+Use a huddl ID from search after logging in. The CLI sends one authenticated
+`PATCH /api/json/huddlz/<id>/rsvp`, then verifies attendance through an authenticated
+search with `filter[id][eq]=<id>`, `relationship=attending`, and `date_filter=all`.
+It prints “Attendance confirmed” only when that exact huddl appears in the result.
+This check matters because the backend may accept a repeat RSVP from someone who
+is still waitlisted; a successful mutation alone does not establish attendance.
+
+Backend rejections remain failures. If submission succeeds but verification fails
+or finds no confirmed attendance, the CLI reports uncertainty and exits 1. It
+does not automatically repeat the mutation or join a waitlist. Missing or rejected
+credentials fail without an interactive login prompt. Waitlist and cancellation
+commands are separate increments.

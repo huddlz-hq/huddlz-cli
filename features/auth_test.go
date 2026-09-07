@@ -22,6 +22,8 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var redirectLogin bool
 	var accountStatus int
 	var revocationFailure string
+	var rsvpStatus int
+	var attendanceConfirmed bool
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -33,6 +35,8 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		redirectLogin = false
 		accountStatus = http.StatusOK
 		revocationFailure = ""
+		rsvpStatus = http.StatusOK
+		attendanceConfirmed = true
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
@@ -49,6 +53,34 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 					return
 				}
 				fmt.Fprint(w, `{"token":"test-session-secret","user":{"id":"account-id","email":"person@example.com","display_name":"Test Person"}}`)
+			case "/api/json/huddlz/11111111-1111-4111-8111-111111111111/rsvp":
+				if rsvpStatus != http.StatusOK {
+					w.WriteHeader(rsvpStatus)
+					fmt.Fprint(w, `{"errors":[{"detail":"test-session-secret"}]}`)
+					return
+				}
+				var body struct {
+					Data struct {
+						ID   string
+						Type string
+					}
+				}
+				if r.Method != "PATCH" || r.Header.Get("Authorization") != "Bearer test-session-secret" || r.Header.Get("Content-Type") != "application/vnd.api+json" || json.NewDecoder(r.Body).Decode(&body) != nil || body.Data.ID != "11111111-1111-4111-8111-111111111111" || body.Data.Type != "huddl" {
+					w.WriteHeader(400)
+					return
+				}
+				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
+			case "/api/json/huddlz":
+				q := r.URL.Query()
+				if r.Method != "GET" || r.Header.Get("Authorization") != "Bearer test-session-secret" || r.Header.Get("Accept") != "application/vnd.api+json" || q.Get("filter[id][eq]") != "11111111-1111-4111-8111-111111111111" || q.Get("relationship") != "attending" || q.Get("date_filter") != "all" || q.Get("page[limit]") != "1" {
+					w.WriteHeader(400)
+					return
+				}
+				if !attendanceConfirmed {
+					fmt.Fprint(w, `{"data":[]}`)
+					return
+				}
+				fmt.Fprint(w, `{"data":[{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}]}`)
 			case "/api/auth/sign_out":
 				switch revocationFailure {
 				case "expired":
@@ -88,14 +120,14 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		}))
 		return nil
 	})
-	run := func(args []string, input string) error {
+	runCLI := func(args []string, input string) error {
 		s := current()
 		s.stdout.Reset()
 		s.stderr.Reset()
 		s.exitCode = 0
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, binary, append([]string{"auth"}, args...)...)
+		cmd := exec.CommandContext(ctx, binary, args...)
 		server := s.server.URL
 		if serverOverride != "" {
 			server = serverOverride
@@ -112,6 +144,58 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		}
 		return err
 	}
+	run := func(args []string, input string) error { return runCLI(append([]string{"auth"}, args...), input) }
+	sc.Step(`^the RSVP endpoint returns HTTP (\d+)$`, func(status int) { rsvpStatus = status })
+	sc.Step(`^the server cannot confirm my attendance$`, func() { attendanceConfirmed = false })
+	sc.Step(`^only one RSVP attempt was made$`, func() error {
+		s := current()
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected one RSVP request, got %d", len(s.requests))
+		}
+		r := <-s.requests
+		if r.Method != "PATCH" || strings.Contains(s.stderr.String(), "test-session-secret") {
+			return fmt.Errorf("unexpected RSVP failure")
+		}
+		return nil
+	})
+	sc.Step(`^the RSVP was submitted only once before checking attendance$`, func() error {
+		s := current()
+		if len(s.requests) != 2 {
+			return fmt.Errorf("expected RSVP then confirmation")
+		}
+		for _, method := range []string{"PATCH", "GET"} {
+			r := <-s.requests
+			if r.Method != method {
+				return fmt.Errorf("unexpected request sequence")
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^I RSVP to a huddl with space available$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI([]string{"rsvp", "11111111-1111-4111-8111-111111111111"}, "")
+	})
+	sc.Step(`^attendance is confirmed by the backend$`, func() error {
+		s := current()
+		if s.stdout.String() != "Attendance confirmed for huddl 11111111-1111-4111-8111-111111111111.\n" {
+			return fmt.Errorf("expected confirmed attendance")
+		}
+		if len(s.requests) != 2 {
+			return fmt.Errorf("expected RSVP and confirmation lookup")
+		}
+		for _, method := range []string{"PATCH", "GET"} {
+			r := <-s.requests
+			if r.Method != method {
+				return fmt.Errorf("unexpected RSVP sequence")
+			}
+		}
+		return nil
+	})
+
 	sc.Step(`^I check authentication status for another server$`, func() error { serverOverride = "http://127.0.0.1:1"; return run([]string{"status"}, "") })
 	sc.Step(`^only a private session token is saved$`, func() error {
 		count := 0

@@ -177,13 +177,17 @@ func authServer() (*url.URL, error) {
 
 // Authentication never follows redirects or prints response bodies and transport errors.
 func authRequest(server *url.URL, method, action, token string, payload []byte, result any) error {
-	request, err := http.NewRequest(method, server.JoinPath("api/auth", action).String(), bytes.NewReader(payload))
+	return sessionRequest(server.JoinPath("api/auth", action), method, token, payload, result, "application/json")
+}
+
+func sessionRequest(endpoint *url.URL, method, token string, payload []byte, result any, mediaType string) error {
+	request, err := http.NewRequest(method, endpoint.String(), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("could not create authentication request")
 	}
-	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Accept", mediaType)
 	if payload != nil {
-		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Content-Type", mediaType)
 	}
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
