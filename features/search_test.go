@@ -33,9 +33,13 @@ func TestFeatures(t *testing.T) {
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, output)
 	}
+	tags := ""
+	if runtime.GOOS == "windows" {
+		tags = "~@unix"
+	}
 	suite := godog.TestSuite{
 		Name:    "huddlz",
-		Options: &godog.Options{Format: "pretty", Paths: []string{"search.feature", "pagination.feature", "location.feature", "details.feature", "json.feature", "auth.feature", "rsvp.feature", "rsvp_list.feature", "rsvp_cancel.feature", "profile.feature", "waitlist.feature", "output.feature"}, TestingT: t, Strict: true},
+		Options: &godog.Options{Format: "pretty", Tags: tags, Paths: []string{"search.feature", "pagination.feature", "location.feature", "details.feature", "json.feature", "auth.feature", "rsvp.feature", "rsvp_list.feature", "rsvp_cancel.feature", "profile.feature", "waitlist.feature", "output.feature", "runtime.feature"}, TestingT: t, Strict: true},
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			var state *searchScenario
 			registerAuth(sc, func() *searchScenario { return state }, binary, t.TempDir())

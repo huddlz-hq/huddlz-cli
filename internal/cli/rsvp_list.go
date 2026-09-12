@@ -28,7 +28,7 @@ type rsvpListGroup struct {
 	Pagination searchPage    `json:"pagination"`
 }
 
-func listRSVPs(args []string, stdout, stderr io.Writer) int {
+func (inv *invocation) listRSVPs(args []string, stdout, stderr io.Writer) int {
 	var status string
 	var limit, offset int
 	var jsonOutput bool
@@ -65,7 +65,7 @@ func listRSVPs(args []string, stdout, stderr io.Writer) int {
 	}
 	groups := make([]rsvpListGroup, 0, len(statuses))
 	for _, status := range statuses {
-		group, err := fetchRSVPGroup(server, token, status, limit, offset, jsonOutput)
+		group, err := inv.fetchRSVPGroup(server, token, status, limit, offset, jsonOutput)
 		if err != nil {
 			var code httpStatusError
 			if errors.As(err, &code) && code == http.StatusUnauthorized {
@@ -102,7 +102,7 @@ func listRSVPs(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func fetchRSVPGroup(server *url.URL, token, status string, limit, offset int, jsonOutput bool) (rsvpListGroup, error) {
+func (inv *invocation) fetchRSVPGroup(server *url.URL, token, status string, limit, offset int, jsonOutput bool) (rsvpListGroup, error) {
 	group := rsvpListGroup{Status: status}
 	relationship := status
 	if status == "confirmed" {
@@ -116,7 +116,7 @@ func fetchRSVPGroup(server *url.URL, token, status string, limit, offset int, js
 			Next json.RawMessage `json:"next"`
 		} `json:"links"`
 	}
-	if err := sessionRequest(endpoint, http.MethodGet, token, nil, &document, "application/vnd.api+json"); err != nil {
+	if err := inv.sessionRequest(endpoint, http.MethodGet, token, nil, &document, "application/vnd.api+json"); err != nil {
 		return group, err
 	}
 	if document.Data == nil || len(*document.Data) > limit {

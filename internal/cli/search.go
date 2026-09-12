@@ -14,7 +14,7 @@ import (
 )
 
 // Anonymous searches have no profile defaults, so their scope is everywhere.
-func search(args []string, stdout, stderr io.Writer) int {
+func (inv *invocation) search(args []string, stdout, stderr io.Writer) int {
 	options, err := parseSearchOptions(args)
 	if errors.Is(err, pflag.ErrHelp) {
 		if _, err := io.WriteString(stdout, searchHelp); err != nil {
@@ -33,7 +33,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
-	if err := applyProfileDefaults(&options); err != nil {
+	if err := inv.applyProfileDefaults(&options); err != nil {
 		fmt.Fprintln(stderr, "Could not read search defaults:", err)
 		return 1
 	}
@@ -50,7 +50,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 		params.Set("distance_miles", strconv.Itoa(location.radius))
 	}
 	endpoint.RawQuery = params.Encode()
-	body, err := discoveryGet(endpoint)
+	body, err := inv.discoveryGet(endpoint)
 	if err != nil {
 		var requestErr *url.Error
 		if errors.As(err, &requestErr) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func applyProfileDefaults(options *searchOptions) error {
+func (inv *invocation) applyProfileDefaults(options *searchOptions) error {
 	if options.anywhere || options.location != nil {
 		return nil
 	}
@@ -34,7 +34,7 @@ func applyProfileDefaults(options *searchOptions) error {
 			Radius int             `json:"distance_miles"`
 		} `json:"search_defaults"`
 	}
-	if err := sessionRequest(server.JoinPath("api/json/profile"), http.MethodGet, token, nil, &profile, "application/json"); err != nil {
+	if err := inv.sessionRequest(server.JoinPath("api/json/profile"), http.MethodGet, token, nil, &profile, "application/json"); err != nil {
 		return err
 	}
 	if profile.Defaults == nil {

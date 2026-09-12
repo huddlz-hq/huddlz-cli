@@ -8,7 +8,7 @@ import (
 	"net/url"
 )
 
-func logout(server *url.URL, stdout, stderr io.Writer, jsonOutput bool) int {
+func (inv *invocation) logout(server *url.URL, stdout, stderr io.Writer, jsonOutput bool) int {
 	token, loadErr := loadSession(server)
 	if err := removeSession(server); err != nil {
 		fmt.Fprintln(stderr, "Logout failed:", err)
@@ -20,7 +20,7 @@ func logout(server *url.URL, stdout, stderr io.Writer, jsonOutput bool) int {
 			fmt.Fprintln(stderr, "Saved session removed locally; server revocation could not be confirmed:", loadErr)
 			return 1
 		}
-		if err := authRequest(server, http.MethodDelete, "sign_out", token, nil, nil); err != nil {
+		if err := inv.authRequest(server, http.MethodDelete, "sign_out", token, nil, nil); err != nil {
 			fmt.Fprintln(stderr, "Saved session removed locally; server revocation could not be confirmed:", err)
 			return 1
 		}

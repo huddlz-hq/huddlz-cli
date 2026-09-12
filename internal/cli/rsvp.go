@@ -10,12 +10,12 @@ import (
 
 const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\n       huddlz rsvp cancel <id>\n       huddlz rsvp waitlist <id>\nAll RSVP commands accept --json.\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
 
-func rsvp(args []string, stdout, stderr io.Writer) int {
+func (inv *invocation) rsvp(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "cancel" {
-		return cancelRSVP(args[1:], stdout, stderr)
+		return inv.cancelRSVP(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "list" {
-		return listRSVPs(args[1:], stdout, stderr)
+		return inv.listRSVPs(args[1:], stdout, stderr)
 	}
 	args, jsonOutput := outputArgs(args)
 	action := "rsvp"
@@ -44,7 +44,7 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	id := strings.ToLower(args[0])
-	state, err := submitAttendance(server, token, id, action)
+	state, err := inv.submitAttendance(server, token, id, action)
 	if err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
@@ -76,7 +76,7 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	attending, err := attendanceMembership(server, token, id, "attending")
+	attending, err := inv.attendanceMembership(server, token, id, "attending")
 	if err != nil {
 		fmt.Fprintln(stderr, "RSVP was submitted, but attendance could not be verified:", err)
 		return 1

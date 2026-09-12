@@ -18,6 +18,7 @@ Usage:
   huddlz auth status
   huddlz auth logout
   huddlz show <id>
+  huddlz completion bash|zsh|fish
   huddlz help
   huddlz version [--json]
   huddlz search [<query>] [--date <filter>] [--type <type>] [--time-zone <zone>]
@@ -25,6 +26,7 @@ Usage:
 Options:
   -h, --help     Show help
   --version      Show version
+  --timeout <duration>  Per-request timeout (default: 15s or HUDDLZ_TIMEOUT)
 
 Search shows one page as a table, defaulting to 20 upcoming huddlz.
 Run 'huddlz search --help' for supported filters and options.
@@ -34,20 +36,22 @@ RSVP requires a saved session.
 
 // Run executes a command. Exit codes are 0 for success, 1 for execution
 // failures, and 2 for invalid usage. Diagnostics go to stderr.
-func Run(args []string, stdout, stderr io.Writer, version string) int {
+func (inv *invocation) run(args []string, stdout, stderr io.Writer, version string) int {
 	if len(args) > 1 && args[0] == "help" {
 		args = append(append([]string{}, args[1:]...), "--help")
 	}
 	var err error
 	switch {
+	case len(args) > 0 && args[0] == "completion":
+		return completion(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "rsvp":
-		return rsvp(args[1:], stdout, stderr)
+		return inv.rsvp(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "auth":
-		return auth(args[1:], stdout, stderr)
+		return inv.auth(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "show":
-		return show(args[1:], stdout, stderr)
+		return inv.show(args[1:], stdout, stderr)
 	case len(args) > 0 && args[0] == "search":
-		return search(args[1:], stdout, stderr)
+		return inv.search(args[1:], stdout, stderr)
 	case len(args) == 0 || len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h"):
 		_, err = io.WriteString(stdout, help)
 	case len(args) == 2 && args[0] == "version" && (args[1] == "--help" || args[1] == "-h"):

@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -35,7 +34,7 @@ type authAccount struct {
 	DisplayName string `json:"display_name"`
 }
 
-func auth(args []string, stdout, stderr io.Writer) int {
+func (inv *invocation) auth(args []string, stdout, stderr io.Writer) int {
 	args, jsonOutput := outputArgs(args)
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 		fmt.Fprint(stdout, authHelp)
@@ -79,11 +78,11 @@ func auth(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if args[0] == "logout" {
-		return logout(server, stdout, stderr, jsonOutput)
+		return inv.logout(server, stdout, stderr, jsonOutput)
 	}
 	var token string
 	if args[0] == "login" {
-		password, err := readPassword(passwordStdin, stderr)
+		password, err := inv.readPassword(passwordStdin, stderr)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
@@ -95,7 +94,7 @@ func auth(args []string, stdout, stderr io.Writer) int {
 		var result struct {
 			Token string `json:"token"`
 		}
-		if err := authRequest(server, http.MethodPost, "sign_in", "", payload, &result); err != nil {
+		if err := inv.authRequest(server, http.MethodPost, "sign_in", "", payload, &result); err != nil {
 			var status httpStatusError
 			if errors.As(err, &status) && status == http.StatusUnauthorized {
 				fmt.Fprintln(stderr, "Login failed: email or password was not accepted. Saved sessions have not been changed.")
@@ -119,7 +118,7 @@ func auth(args []string, stdout, stderr io.Writer) int {
 	var result struct {
 		User *authAccount `json:"user"`
 	}
-	if err := authRequest(server, http.MethodGet, "me", token, nil, &result); err != nil {
+	if err := inv.authRequest(server, http.MethodGet, "me", token, nil, &result); err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
 			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")
@@ -147,6 +146,25 @@ func auth(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// Reading stdin may block indefinitely; cancellation must also release the CLI.
+func (inv *invocation) readPassword(fromStdin bool, stderr io.Writer) (string, error) {
+	type result struct {
+		password string
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		password, err := readPassword(fromStdin, stderr)
+		done <- result{password, err}
+	}()
+	select {
+	case r := <-done:
+		return r.password, r.err
+	case <-inv.ctx.Done():
+		return "", inv.ctx.Err()
+	}
 }
 
 func readPassword(fromStdin bool, stderr io.Writer) (string, error) {
@@ -185,12 +203,12 @@ func authServer() (*url.URL, error) {
 }
 
 // Authentication never follows redirects or prints response bodies and transport errors.
-func authRequest(server *url.URL, method, action, token string, payload []byte, result any) error {
-	return sessionRequest(server.JoinPath("api/auth", action), method, token, payload, result, "application/json")
+func (inv *invocation) authRequest(server *url.URL, method, action, token string, payload []byte, result any) error {
+	return inv.sessionRequest(server.JoinPath("api/auth", action), method, token, payload, result, "application/json")
 }
 
-func sessionRequest(endpoint *url.URL, method, token string, payload []byte, result any, mediaType string) error {
-	request, err := http.NewRequest(method, endpoint.String(), bytes.NewReader(payload))
+func (inv *invocation) sessionRequest(endpoint *url.URL, method, token string, payload []byte, result any, mediaType string) error {
+	request, err := http.NewRequestWithContext(inv.ctx, method, endpoint.String(), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("could not create authentication request")
 	}
@@ -201,7 +219,7 @@ func sessionRequest(endpoint *url.URL, method, token string, payload []byte, res
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
-	client := http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := http.Client{Timeout: inv.timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
 	if err != nil {
 		return fmt.Errorf("authentication request could not be completed")

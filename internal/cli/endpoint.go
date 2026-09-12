@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 )
 
 func huddlEndpoint() (*url.URL, error) {
@@ -35,13 +34,13 @@ func serverURL() (*url.URL, error) {
 }
 
 // getJSONAPI applies the shared transport policy for public reads.
-func getJSONAPI(endpoint *url.URL) ([]byte, error) {
-	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
+func (inv *invocation) getJSONAPI(endpoint *url.URL) ([]byte, error) {
+	request, err := http.NewRequestWithContext(inv.ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 	request.Header.Set("Accept", "application/vnd.api+json")
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: inv.timeout}
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, err

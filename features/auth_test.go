@@ -33,6 +33,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var waitlistState string
 	var rejectDiscovery bool
 	var jsonCommand string
+	var slowAPI bool
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -53,8 +54,16 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		profileMode = ""
 		waitlistState = "waitlisted"
 		rejectDiscovery = false
+		slowAPI = false
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
+			if slowAPI {
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(2 * time.Second):
+				}
+			}
 			switch r.URL.Path {
 			case "/api/json/huddlz/11111111-1111-4111-8111-111111111111/join_waitlist":
 				var body struct{ Data struct{ ID, Type string } }
@@ -573,6 +582,79 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 			return fmt.Errorf("missing structured field %s", key)
 		}
 
+		return nil
+	})
+
+	sc.Step(`^the API responds slowly$`, func() { slowAPI = true })
+	sc.Step(`^I search with a short timeout$`, func() error { return runCLI([]string{"search", "--anywhere", "--timeout", "20ms"}, "") })
+	sc.Step(`^no automatic request retry occurs$`, func() error {
+		if len(current().requests) != 1 {
+			return fmt.Errorf("expected one request")
+		}
+		return nil
+	})
+	sc.Step(`^I request (bash|zsh|fish) completion$`, func(shell string) error { return runCLI([]string{"completion", shell}, "") })
+	sc.Step(`^bash completion respects the selected subcommand$`, func() error {
+		script := current().stdout.String() + `
+set -e
+COMP_WORDS=(huddlz auth login --); COMP_CWORD=3; _huddlz
+[[ " ${COMPREPLY[*]} " == *" --email "* ]]
+COMP_WORDS=(huddlz auth status --); _huddlz
+[[ " ${COMPREPLY[*]} " != *" --email "* ]]
+COMP_WORDS=(huddlz rsvp list --); _huddlz
+[[ " ${COMPREPLY[*]} " == *" --status "* ]]
+COMP_WORDS=(huddlz rsvp cancel some-id --); COMP_CWORD=4; _huddlz
+[[ " ${COMPREPLY[*]} " != *" --status "* ]]
+[[ " ${COMPREPLY[*]} " == *" --json "* ]]
+`
+		cmd := exec.Command("bash", "-c", script)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("completion suggestions: %v: %s", err, output)
+		}
+		return nil
+	})
+
+	sc.Step(`^completion includes CLI commands$`, func() error {
+		for _, v := range []string{"search", "rsvp", "auth"} {
+			if !strings.Contains(current().stdout.String(), v) {
+				return fmt.Errorf("missing completion %s", v)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^I interrupt a running search$`, func() error {
+		s := current()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, binary, "search", "--anywhere")
+		cmd.Env = testEnvironment(s.server.URL, home)
+		cmd.Stdout = &s.stdout
+		cmd.Stderr = &s.stderr
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		select {
+		case <-s.requests:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			return err
+		}
+		err := cmd.Wait()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			s.exitCode = exitErr.ExitCode()
+			return nil
+		}
+		return fmt.Errorf("expected interrupt failure: %v", err)
+	})
+	sc.Step(`^the command exits as interrupted without successful output$`, func() error {
+		s := current()
+		if s.exitCode != 130 || s.stdout.Len() != 0 || !strings.Contains(s.stderr.String(), "Interrupted.") {
+			return fmt.Errorf("expected interrupted exit, got %d", s.exitCode)
+		}
 		return nil
 	})
 

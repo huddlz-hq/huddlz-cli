@@ -1,0 +1,28 @@
+_huddlz() {
+  local cur="${COMP_WORDS[COMP_CWORD]}" prev="${COMP_WORDS[COMP_CWORD-1]}" choices
+  case "$prev" in
+    --status) choices='all confirmed waitlisted';;
+    --date) choices='upcoming this_week this_month past all';;
+    --type) choices='in_person virtual hybrid';;
+    completion) choices='bash zsh fish';;
+    auth) choices='login status logout';;
+    rsvp) choices='list waitlist cancel';;
+    *)
+      if [[ $COMP_CWORD -eq 1 ]]; then
+        choices='search show rsvp auth completion help version'
+      else
+        case "${COMP_WORDS[1]}" in
+          search) choices='--anywhere --lat --lng --radius --date --type --time-zone --limit --offset --json --timeout --help';;
+          auth)
+            choices='--json --timeout --help'
+            if [[ ${COMP_WORDS[2]} == login ]]; then choices="--email --password-stdin $choices"; fi;;
+          rsvp)
+            choices='--json --timeout --help'
+            if [[ ${COMP_WORDS[2]} == list ]]; then choices="--status --limit --offset $choices"; fi;;
+          *) choices='--json --timeout --help';;
+        esac
+      fi;;
+  esac
+  COMPREPLY=( $(compgen -W "$choices" -- "$cur") )
+}
+complete -F _huddlz huddlz

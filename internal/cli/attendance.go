@@ -10,7 +10,7 @@ import (
 
 var errInvalidAttendanceResponse = errors.New("invalid attendance mutation response")
 
-func submitAttendance(server *url.URL, token, id, action string) (string, error) {
+func (inv *invocation) submitAttendance(server *url.URL, token, id, action string) (string, error) {
 	payload, _ := json.Marshal(struct {
 		Data huddlIdentity `json:"data"`
 	}{huddlIdentity{ID: id, Type: "huddl"}})
@@ -22,7 +22,7 @@ func submitAttendance(server *url.URL, token, id, action string) (string, error)
 			} `json:"attributes"`
 		} `json:"data"`
 	}
-	if err := sessionRequest(server.JoinPath("api/json/huddlz", id, action), http.MethodPatch, token, payload, &response, "application/vnd.api+json"); err != nil {
+	if err := inv.sessionRequest(server.JoinPath("api/json/huddlz", id, action), http.MethodPatch, token, payload, &response, "application/vnd.api+json"); err != nil {
 		return "", err
 	}
 	if response.Data == nil || response.Data.ID != id || response.Data.Type != "huddl" {
@@ -31,13 +31,13 @@ func submitAttendance(server *url.URL, token, id, action string) (string, error)
 	return response.Data.Attributes.State, nil
 }
 
-func attendanceMembership(server *url.URL, token, id, relationship string) (bool, error) {
+func (inv *invocation) attendanceMembership(server *url.URL, token, id, relationship string) (bool, error) {
 	endpoint := server.JoinPath("api/json/huddlz")
 	endpoint.RawQuery = url.Values{"filter[id][eq]": {id}, "relationship": {relationship}, "date_filter": {"all"}, "search_time_zone": {"Etc/UTC"}, "page[limit]": {"1"}}.Encode()
 	var response struct {
 		Data *[]huddlIdentity `json:"data"`
 	}
-	if err := sessionRequest(endpoint, http.MethodGet, token, nil, &response, "application/vnd.api+json"); err != nil {
+	if err := inv.sessionRequest(endpoint, http.MethodGet, token, nil, &response, "application/vnd.api+json"); err != nil {
 		return false, err
 	}
 	if response.Data == nil || len(*response.Data) > 1 {

@@ -13,7 +13,7 @@ import (
 
 const showHelp = "Usage: huddlz show <id> [--json]\nShows details visible to the current caller. Seat availability and undisclosed links are identified explicitly.\n"
 
-func show(args []string, stdout, stderr io.Writer) int {
+func (inv *invocation) show(args []string, stdout, stderr io.Writer) int {
 	args, jsonOutput := outputArgs(args)
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, showHelp); err != nil {
@@ -33,7 +33,7 @@ func show(args []string, stdout, stderr io.Writer) int {
 	}
 	endpoint = endpoint.JoinPath(args[0])
 	endpoint.RawQuery = url.Values{"include": {"group"}, "fields[group]": {"name,slug"}, "fields[huddl]": {"title,description,starts_at,ends_at,time_zone,event_type,physical_location,max_attendees,lifecycle_state,visible_virtual_link,attendance_state,group"}}.Encode()
-	body, err := discoveryGet(endpoint)
+	body, err := inv.discoveryGet(endpoint)
 	if err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound) {

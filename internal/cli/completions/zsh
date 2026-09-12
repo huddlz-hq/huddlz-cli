@@ -1,0 +1,29 @@
+#compdef huddlz
+_huddlz() {
+  local -a choices
+  case "$words[CURRENT-1]" in
+    --status) choices=(all confirmed waitlisted);;
+    --date) choices=(upcoming this_week this_month past all);;
+    --type) choices=(in_person virtual hybrid);;
+    auth) choices=(login status logout);;
+    rsvp) choices=(list waitlist cancel);;
+    completion) choices=(bash zsh fish);;
+    *)
+      if (( CURRENT == 2 )); then
+        choices=(search show rsvp auth completion help version)
+      else
+        case "$words[2]" in
+          search) choices=(--anywhere --lat --lng --radius --date --type --time-zone --limit --offset --json --timeout --help);;
+          auth)
+            choices=(--json --timeout --help)
+            if [[ $words[3] == login ]]; then choices=(--email --password-stdin $choices); fi;;
+          rsvp)
+            choices=(--json --timeout --help)
+            if [[ $words[3] == list ]]; then choices=(--status --limit --offset $choices); fi;;
+          *) choices=(--json --timeout --help);;
+        esac
+      fi;;
+  esac
+  compadd -- $choices
+}
+compdef _huddlz huddlz

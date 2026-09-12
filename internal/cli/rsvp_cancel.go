@@ -10,7 +10,7 @@ import (
 
 const cancelRSVPHelp = "Usage: huddlz rsvp cancel <id> [--json]\nCancels confirmed attendance or leaves a waitlist, then verifies both memberships are absent.\n"
 
-func cancelRSVP(args []string, stdout, stderr io.Writer) int {
+func (inv *invocation) cancelRSVP(args []string, stdout, stderr io.Writer) int {
 	args, jsonOutput := outputArgs(args)
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, cancelRSVPHelp); err != nil {
@@ -33,7 +33,7 @@ func cancelRSVP(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	id := strings.ToLower(args[0])
-	if _, err := submitAttendance(server, token, id, "cancel_rsvp"); err != nil {
+	if _, err := inv.submitAttendance(server, token, id, "cancel_rsvp"); err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
 			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")
@@ -45,7 +45,7 @@ func cancelRSVP(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	for _, relationship := range []string{"attending", "waitlisted"} {
-		member, err := attendanceMembership(server, token, id, relationship)
+		member, err := inv.attendanceMembership(server, token, id, relationship)
 		if err != nil {
 			fmt.Fprintln(stderr, "Cancellation was submitted, but membership removal could not be verified:", err)
 			return 1

@@ -1,0 +1,19 @@
+complete -c huddlz -f
+complete -c huddlz -n '__fish_use_subcommand' -a 'search show rsvp auth completion help version'
+complete -c huddlz -n '__fish_seen_subcommand_from auth; and not __fish_seen_subcommand_from login status logout' -a 'login status logout'
+complete -c huddlz -n '__fish_seen_subcommand_from rsvp; and not __fish_seen_subcommand_from list waitlist cancel' -a 'list waitlist cancel'
+complete -c huddlz -n '__fish_seen_subcommand_from completion; and not __fish_seen_subcommand_from bash zsh fish' -a 'bash zsh fish'
+complete -c huddlz -l json
+complete -c huddlz -l help -s h
+complete -c huddlz -l timeout -r
+complete -c huddlz -n '__fish_seen_subcommand_from search' -l anywhere
+complete -c huddlz -n '__fish_seen_subcommand_from search' -l date -r -a 'upcoming this_week this_month past all'
+complete -c huddlz -n '__fish_seen_subcommand_from search' -l type -r -a 'in_person virtual hybrid'
+for flag in lat lng radius time-zone limit offset
+  complete -c huddlz -n '__fish_seen_subcommand_from search' -l $flag -r
+end
+complete -c huddlz -n '__fish_seen_subcommand_from rsvp; and __fish_seen_subcommand_from list' -l status -r -a 'all confirmed waitlisted'
+complete -c huddlz -n '__fish_seen_subcommand_from rsvp; and __fish_seen_subcommand_from list' -l limit -r
+complete -c huddlz -n '__fish_seen_subcommand_from rsvp; and __fish_seen_subcommand_from list' -l offset -r
+complete -c huddlz -n '__fish_seen_subcommand_from auth; and __fish_seen_subcommand_from login' -l email -r
+complete -c huddlz -n '__fish_seen_subcommand_from auth; and __fish_seen_subcommand_from login' -l password-stdin

@@ -375,3 +375,31 @@ empty and diagnostics on stderr. Token and password values are never result fiel
 
 Use either `huddlz help rsvp list` or `huddlz rsvp list --help`; the same help
 convention works for discovery and authentication subcommands.
+
+### Completion, timeouts, and interruption
+
+Load completion into your current shell (add the command to its startup file to
+keep it enabled):
+
+```sh
+# Bash
+source <(huddlz completion bash)
+# Zsh, after running compinit
+source <(huddlz completion zsh)
+# Fish
+huddlz completion fish | source
+```
+
+Requests default to a 15-second timeout. Set `HUDDLZ_TIMEOUT=30s` for a persistent
+shell preference, or pass `--timeout 5s` on any invocation to override it. Durations
+must be positive; the timeout applies to each HTTP request. Nothing is retried
+automatically. Ctrl-C cancels an in-flight request and exits with status 130.
+An interrupted mutation may already have reached the server; check `rsvp list`
+before repeating it.
+
+```sh
+huddlz search hiking --date this_week --timeout 5s
+huddlz search --anywhere --type virtual --json
+huddlz rsvp list --status waitlisted
+huddlz help auth login
+```
