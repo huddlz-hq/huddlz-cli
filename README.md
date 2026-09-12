@@ -279,16 +279,15 @@ huddlz rsvp <id>
 ```
 
 Use a huddl ID from search after logging in. The CLI sends one authenticated
-`PATCH /api/json/huddlz/<id>/rsvp`, then verifies attendance through an authenticated
-search with `filter[id][eq]=<id>`, `relationship=attending`, and `date_filter=all`.
-It prints “Attendance confirmed” only when that exact huddl appears in the result.
-This check matters because the backend may accept a repeat RSVP from someone who
-is still waitlisted; a successful mutation alone does not establish attendance.
+`PATCH /api/json/huddlz/<id>/rsvp` and reports the returned attendance state.
+For older responses without that field, it verifies the exact huddl through
+`relationship=attending` and `date_filter=all`. A successful mutation alone does
+not establish attendance: a repeated RSVP may leave an existing waitlist entry.
 
 Backend rejections remain failures. If submission succeeds but verification fails
 or finds no confirmed attendance, the CLI reports uncertainty and exits 1. It
 does not automatically repeat the mutation or join a waitlist. Missing or rejected
-credentials fail without an interactive login prompt. Joining a waitlist remains a separate increment.
+credentials fail without an interactive login prompt. Use `huddlz rsvp waitlist <id>` to explicitly request a waitlist entry.
 
 ### List my RSVPs
 
@@ -337,3 +336,15 @@ Signed-in searches now fetch current home search defaults from `/api/json/profil
 when no explicit coordinates or `--anywhere` are supplied. The returned coordinates,
 radius, and location timezone are used for that request; an explicit `--time-zone`
 continues to take precedence. No separate home-location copy is persisted locally.
+
+### Join a waitlist
+
+`huddlz rsvp waitlist <id>` submits one request to the full huddl's waitlist API.
+It reports the returned `attendance_state` (`waitlisted` or `confirmed`), without
+inventing a queue position or remaining-seat count. Normal RSVP now also honors
+this field, including a repeated RSVP by someone already waitlisted. An unknown
+or absent waitlist outcome fails. The CLI does not infer a full-huddl error or
+silently switch a normal RSVP into a waitlist request.
+
+The newer API returns attendance state directly. For ordinary RSVP responses
+from older servers that omit it, the CLI retains its attending-only verification.

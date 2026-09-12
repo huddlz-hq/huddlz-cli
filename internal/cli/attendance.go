@@ -10,20 +10,25 @@ import (
 
 var errInvalidAttendanceResponse = errors.New("invalid attendance mutation response")
 
-func submitAttendance(server *url.URL, token, id, action string) error {
+func submitAttendance(server *url.URL, token, id, action string) (string, error) {
 	payload, _ := json.Marshal(struct {
 		Data huddlIdentity `json:"data"`
 	}{huddlIdentity{ID: id, Type: "huddl"}})
 	var response struct {
-		Data *huddlIdentity `json:"data"`
+		Data *struct {
+			huddlIdentity
+			Attributes struct {
+				State string `json:"attendance_state"`
+			} `json:"attributes"`
+		} `json:"data"`
 	}
 	if err := sessionRequest(server.JoinPath("api/json/huddlz", id, action), http.MethodPatch, token, payload, &response, "application/vnd.api+json"); err != nil {
-		return err
+		return "", err
 	}
 	if response.Data == nil || response.Data.ID != id || response.Data.Type != "huddl" {
-		return errInvalidAttendanceResponse
+		return "", errInvalidAttendanceResponse
 	}
-	return nil
+	return response.Data.Attributes.State, nil
 }
 
 func attendanceMembership(server *url.URL, token, id, relationship string) (bool, error) {

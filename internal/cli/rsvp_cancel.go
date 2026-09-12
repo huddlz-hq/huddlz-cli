@@ -32,7 +32,7 @@ func cancelRSVP(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	id := strings.ToLower(args[0])
-	if err := submitAttendance(server, token, id, "cancel_rsvp"); err != nil {
+	if _, err := submitAttendance(server, token, id, "cancel_rsvp"); err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
 			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")

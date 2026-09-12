@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\n       huddlz rsvp cancel <id>\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
+const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\n       huddlz rsvp cancel <id>\n       huddlz rsvp waitlist <id>\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
 
 func rsvp(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "cancel" {
@@ -16,6 +16,11 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "list" {
 		return listRSVPs(args[1:], stdout, stderr)
+	}
+	action := "rsvp"
+	if len(args) > 0 && args[0] == "waitlist" {
+		action = "join_waitlist"
+		args = args[1:]
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, rsvpHelp); err != nil {
@@ -38,7 +43,8 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	id := strings.ToLower(args[0])
-	if err := submitAttendance(server, token, id, "rsvp"); err != nil {
+	state, err := submitAttendance(server, token, id, action)
+	if err != nil {
 		var status httpStatusError
 		if errors.As(err, &status) && status == http.StatusUnauthorized {
 			fmt.Fprintln(stderr, "Authentication required: this session is no longer accepted. Run 'huddlz auth login --email <email>' to log in again.")
@@ -48,6 +54,23 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "RSVP request failed; attendance was not confirmed:", err)
 		}
 		return 1
+	}
+	if state != "" || action == "join_waitlist" {
+		message := ""
+		switch state {
+		case "confirmed":
+			message = "Attendance confirmed for huddl"
+		case "waitlisted":
+			message = "Waitlisted for huddl"
+		default:
+			fmt.Fprintln(stderr, "Attendance state was not confirmed by the API.")
+			return 1
+		}
+		if _, err := fmt.Fprintf(stdout, "%s %s.\n", message, id); err != nil {
+			fmt.Fprintln(stderr, "Could not write output:", err)
+			return 1
+		}
+		return 0
 	}
 	attending, err := attendanceMembership(server, token, id, "attending")
 	if err != nil {

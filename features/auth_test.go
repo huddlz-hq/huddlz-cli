@@ -29,6 +29,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var cancelled bool
 	var cancelMode string
 	var profileMode string
+	var waitlistState string
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -47,9 +48,17 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		cancelled = false
 		cancelMode = ""
 		profileMode = ""
+		waitlistState = "waitlisted"
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
+			case "/api/json/huddlz/11111111-1111-4111-8111-111111111111/join_waitlist":
+				var body struct{ Data struct{ ID, Type string } }
+				if r.Method != "PATCH" || r.Header.Get("Authorization") != "Bearer test-session-secret" || json.NewDecoder(r.Body).Decode(&body) != nil || body.Data.ID != "11111111-1111-4111-8111-111111111111" {
+					w.WriteHeader(400)
+					return
+				}
+				fmt.Fprintf(w, `{"data":{"id":"11111111-1111-4111-8111-111111111111","type":"huddl","attributes":{"attendance_state":%q}}}`, waitlistState)
 			case "/api/json/profile":
 				if profileMode == "unavailable" {
 					w.WriteHeader(503)
@@ -470,6 +479,26 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		q := r.URL.Query()
 		if q.Get("search_latitude") != "30.2672" || q.Get("search_longitude") != "-97.7431" || q.Get("distance_miles") != "25" || q.Get("search_time_zone") != "America/Chicago" {
 			return fmt.Errorf("incorrect profile search")
+		}
+		return nil
+	})
+
+	sc.Step(`^the waitlist API reports (waitlisted|confirmed|none)$`, func(state string) { waitlistState = state })
+	sc.Step(`^I request waitlist membership$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI([]string{"rsvp", "waitlist", "11111111-1111-4111-8111-111111111111"}, "")
+	})
+	sc.Step(`^the waitlist result reports (waitlisted|confirmed)$`, func(state string) error {
+		s := current()
+		want := "Waitlisted for huddl"
+		if state == "confirmed" {
+			want = "Attendance confirmed for huddl"
+		}
+		if !strings.HasPrefix(s.stdout.String(), want) || len(s.requests) != 1 {
+			return fmt.Errorf("expected backend state %s", state)
 		}
 		return nil
 	})
