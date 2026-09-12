@@ -21,6 +21,9 @@ jobs:
           cache: true
       - name: Check formatting
         shell: bash
-        run: test -z "$(gofmt -l cmd internal features)"
+        run: |
+          unformatted=$(gofmt -l cmd internal features)
+          printf '%s\n' "$unformatted"
+          test -z "$unformatted"
       - run: go vet ./...
       - run: go test ./... -count=1
