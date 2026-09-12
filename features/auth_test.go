@@ -99,7 +99,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
 			case "/api/json/huddlz":
 				q := r.URL.Query()
-				if q.Get("search_latitude") != "" {
+				if q.Get("search_latitude") != "" || q.Get("relationship") == "" {
 					fmt.Fprint(w, `{"data":[],"links":{"next":null}}`)
 					return
 				}
@@ -403,6 +403,25 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 			if r.Method != "GET" || r.URL.Query().Get("relationship") != status {
 				return fmt.Errorf("expected both membership checks")
 			}
+		}
+		return nil
+	})
+
+	sc.Step(`^I search everywhere despite my profile$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI([]string{"search", "--anywhere"}, "")
+	})
+	sc.Step(`^the profile is bypassed without a geographic restriction$`, func() error {
+		s := current()
+		if len(s.requests) != 1 || !strings.Contains(s.stdout.String(), "Searching everywhere") {
+			return fmt.Errorf("expected unrestricted search only")
+		}
+		r := <-s.requests
+		if r.Method != "GET" || r.URL.Path != "/api/json/huddlz" || r.URL.Query().Get("search_latitude") != "" || r.URL.Query().Get("search_longitude") != "" {
+			return fmt.Errorf("unexpected search restriction or profile update")
 		}
 		return nil
 	})
