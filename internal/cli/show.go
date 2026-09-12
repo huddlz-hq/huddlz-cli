@@ -11,9 +11,10 @@ import (
 	"time"
 )
 
-const showHelp = "Usage: huddlz show <id>\nShows details visible to the current caller. Seat availability and undisclosed links are identified explicitly.\n"
+const showHelp = "Usage: huddlz show <id> [--json]\nShows details visible to the current caller. Seat availability and undisclosed links are identified explicitly.\n"
 
 func show(args []string, stdout, stderr io.Writer) int {
+	args, jsonOutput := outputArgs(args)
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, showHelp); err != nil {
 			fmt.Fprintln(stderr, err)
@@ -43,7 +44,8 @@ func show(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	var document struct {
-		Included []struct {
+		SeatAvailability string `json:"seat_availability"`
+		Included         []struct {
 			ID         string `json:"id"`
 			Type       string `json:"type"`
 			Attributes struct {
@@ -85,6 +87,10 @@ func show(args []string, stdout, stderr io.Writer) int {
 	if h.Type != "huddl" || h.ID != args[0] || strings.TrimSpace(a.Title) == "" || startErr != nil || endErr != nil || (a.MaxAttendees != nil && *a.MaxAttendees < 1) {
 		fmt.Fprintln(stderr, "Huddl lookup failed: invalid JSON:API resource.")
 		return 1
+	}
+	if jsonOutput {
+		document.SeatAvailability = "not_exposed"
+		return writeJSON(stdout, stderr, document)
 	}
 	limit := "Not specified"
 	if a.MaxAttendees != nil {

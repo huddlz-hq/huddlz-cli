@@ -24,6 +24,7 @@ const authHelp = `Usage:
 
 Login prompts for a hidden password; --password-stdin reads it from standard input.
 Only the session token is saved, scoped to this server, in a user-only file.
+All auth commands accept --json for structured results.
 Status verifies the saved session with the server.
 Logout removes the local session and attempts server revocation.
 `
@@ -35,6 +36,11 @@ type authAccount struct {
 }
 
 func auth(args []string, stdout, stderr io.Writer) int {
+	args, jsonOutput := outputArgs(args)
+	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
+		fmt.Fprint(stdout, authHelp)
+		return 0
+	}
 	if len(args) == 0 || len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, authHelp); err != nil {
 			return 1
@@ -73,7 +79,7 @@ func auth(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if args[0] == "logout" {
-		return logout(server, stdout, stderr)
+		return logout(server, stdout, stderr, jsonOutput)
 	}
 	var token string
 	if args[0] == "login" {
@@ -131,6 +137,9 @@ func auth(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "Could not save session:", err)
 			return 1
 		}
+	}
+	if jsonOutput {
+		return writeJSON(stdout, stderr, result)
 	}
 	_, err = fmt.Fprintf(stdout, "Account: %s\nEmail: %s\nID: %s\n", tableCell(result.User.DisplayName), tableCell(result.User.Email), tableCell(result.User.ID))
 	if err != nil {

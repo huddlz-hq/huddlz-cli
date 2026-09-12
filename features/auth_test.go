@@ -32,6 +32,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var profileMode string
 	var waitlistState string
 	var rejectDiscovery bool
+	var jsonCommand string
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -536,6 +537,42 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				return fmt.Errorf("missing authorized detail %s", v)
 			}
 		}
+		return nil
+	})
+
+	sc.Step(`^I request JSON from (auth login|auth status|auth logout|show|rsvp|rsvp waitlist|rsvp cancel)$`, func(command string) error {
+		jsonCommand = command
+		args := strings.Fields(command)
+		if command == "auth login" {
+			args = append(args, "--email", "person@example.com", "--password-stdin")
+		} else if !strings.HasPrefix(command, "auth ") {
+			args = append(args, "11111111-1111-4111-8111-111111111111")
+		}
+		args = append(args, "--json")
+		return runCLI(args, "test-password\n")
+	})
+	sc.Step(`^the command emits a structured result without credentials$`, func() error {
+		s := current()
+		var result map[string]json.RawMessage
+		if err := json.Unmarshal(s.stdout.Bytes(), &result); err != nil {
+			return err
+		}
+		if len(result) == 0 || strings.Contains(s.stdout.String(), "test-session-secret") || strings.Contains(s.stdout.String(), "test-password") {
+			return fmt.Errorf("invalid result or credentials exposed")
+		}
+		key := "huddl_id"
+		if strings.HasPrefix(jsonCommand, "auth ") {
+			key = "user"
+			if jsonCommand == "auth logout" {
+				key = "local_removed"
+			}
+		} else if jsonCommand == "show" {
+			key = "data"
+		}
+		if len(result[key]) == 0 {
+			return fmt.Errorf("missing structured field %s", key)
+		}
+
 		return nil
 	})
 

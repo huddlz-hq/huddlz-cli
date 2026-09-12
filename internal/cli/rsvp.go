@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\n       huddlz rsvp cancel <id>\n       huddlz rsvp waitlist <id>\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
+const rsvpHelp = "Usage: huddlz rsvp <id>\n       huddlz rsvp list [--help]\n       huddlz rsvp cancel <id>\n       huddlz rsvp waitlist <id>\nAll RSVP commands accept --json.\nRequires a saved session. Confirms attendance with the server after submitting the RSVP.\n"
 
 func rsvp(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "cancel" {
@@ -17,6 +17,7 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "list" {
 		return listRSVPs(args[1:], stdout, stderr)
 	}
+	args, jsonOutput := outputArgs(args)
 	action := "rsvp"
 	if len(args) > 0 && args[0] == "waitlist" {
 		action = "join_waitlist"
@@ -66,6 +67,9 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "Attendance state was not confirmed by the API.")
 			return 1
 		}
+		if jsonOutput {
+			return writeJSON(stdout, stderr, membershipResult{id, state})
+		}
 		if _, err := fmt.Fprintf(stdout, "%s %s.\n", message, id); err != nil {
 			fmt.Fprintln(stderr, "Could not write output:", err)
 			return 1
@@ -80,6 +84,9 @@ func rsvp(args []string, stdout, stderr io.Writer) int {
 	if !attending {
 		fmt.Fprintln(stderr, "RSVP was submitted, but the server did not confirm attendance. You may still be waitlisted.")
 		return 1
+	}
+	if jsonOutput {
+		return writeJSON(stdout, stderr, membershipResult{id, "confirmed"})
 	}
 	if _, err := fmt.Fprintf(stdout, "Attendance confirmed for huddl %s.\n", id); err != nil {
 		fmt.Fprintln(stderr, "Could not write output:", err)

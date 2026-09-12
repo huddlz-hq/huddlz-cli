@@ -35,6 +35,9 @@ RSVP requires a saved session.
 // Run executes a command. Exit codes are 0 for success, 1 for execution
 // failures, and 2 for invalid usage. Diagnostics go to stderr.
 func Run(args []string, stdout, stderr io.Writer, version string) int {
+	if len(args) > 1 && args[0] == "help" {
+		args = append(append([]string{}, args[1:]...), "--help")
+	}
 	var err error
 	switch {
 	case len(args) > 0 && args[0] == "rsvp":
@@ -47,6 +50,8 @@ func Run(args []string, stdout, stderr io.Writer, version string) int {
 		return search(args[1:], stdout, stderr)
 	case len(args) == 0 || len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h"):
 		_, err = io.WriteString(stdout, help)
+	case len(args) == 2 && args[0] == "version" && (args[1] == "--help" || args[1] == "-h"):
+		_, err = io.WriteString(stdout, "Usage: huddlz version [--json]\n")
 	case len(args) == 1 && (args[0] == "version" || args[0] == "--version"):
 		_, err = fmt.Fprintf(stdout, "huddlz %s\n", version)
 	case len(args) == 2 && args[0] == "version" && args[1] == "--json":

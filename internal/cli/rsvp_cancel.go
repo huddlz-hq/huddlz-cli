@@ -8,9 +8,10 @@ import (
 	"strings"
 )
 
-const cancelRSVPHelp = "Usage: huddlz rsvp cancel <id>\nCancels confirmed attendance or leaves a waitlist, then verifies both memberships are absent.\n"
+const cancelRSVPHelp = "Usage: huddlz rsvp cancel <id> [--json]\nCancels confirmed attendance or leaves a waitlist, then verifies both memberships are absent.\n"
 
 func cancelRSVP(args []string, stdout, stderr io.Writer) int {
+	args, jsonOutput := outputArgs(args)
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(stdout, cancelRSVPHelp); err != nil {
 			return 1
@@ -53,6 +54,9 @@ func cancelRSVP(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "Cancellation was submitted, but the server did not confirm removal from attendance and waitlist.")
 			return 1
 		}
+	}
+	if jsonOutput {
+		return writeJSON(stdout, stderr, membershipResult{id, "none"})
 	}
 	if _, err := fmt.Fprintf(stdout, "RSVP cancelled for huddl %s. No confirmed or waitlisted membership remains.\n", id); err != nil {
 		fmt.Fprintln(stderr, "Could not write output:", err)

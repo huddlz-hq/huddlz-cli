@@ -217,8 +217,7 @@ The document contains:
   the filters and `--json`, using the same POSIX shell quoting as readable output.
 
 Strings retain their original values in JSON; table formatting does not alter
-structured data. This initial JSON convention covers search; `show` remains
-readable output for now.
+structured data. Every result-bearing command supports `--json`; help remains readable text.
 
 ### Authenticate
 
@@ -364,3 +363,15 @@ APPDATA, and XDG configuration from the developer's credentials.
 On Windows, sessions live beneath `%APPDATA%\\huddlz\\sessions` and inherit that
 user directory's Windows access controls; POSIX mode bits do not enforce Windows
 ACLs. Use a private OS profile directory, not a shared APPDATA override.
+
+### Consistent structured results and help
+
+All result commands accept `--json`. Search and RSVP lists keep their documented
+pagination envelopes. `show` emits `data`, `included` hosting resources, and
+`seat_availability`. Login/status emit `user`; logout emits `local_removed` and
+`server_revoked`. RSVP, waitlist, and cancellation emit `huddl_id` and
+`attendance_state` (`confirmed`, `waitlisted`, or `none`). Failures keep stdout
+empty and diagnostics on stderr. Token and password values are never result fields.
+
+Use either `huddlz help rsvp list` or `huddlz rsvp list --help`; the same help
+convention works for discovery and authentication subcommands.
