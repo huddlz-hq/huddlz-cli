@@ -28,6 +28,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var cancellationMembership string
 	var cancelled bool
 	var cancelMode string
+	var profileMode string
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -45,10 +46,19 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		cancellationMembership = ""
 		cancelled = false
 		cancelMode = ""
+		profileMode = ""
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
 			case "/api/json/profile":
+				if profileMode == "unavailable" {
+					w.WriteHeader(503)
+					return
+				}
+				if profileMode == "unset" || profileMode == "incomplete" {
+					fmt.Fprint(w, `{"search_defaults":{"home_location":null,"distance_miles":25}}`)
+					return
+				}
 				if r.Header.Get("Authorization") != "Bearer test-session-secret" {
 					w.WriteHeader(401)
 					return
@@ -422,6 +432,20 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		r := <-s.requests
 		if r.Method != "GET" || r.URL.Path != "/api/json/huddlz" || r.URL.Query().Get("search_latitude") != "" || r.URL.Query().Get("search_longitude") != "" {
 			return fmt.Errorf("unexpected search restriction or profile update")
+		}
+		return nil
+	})
+
+	sc.Step(`^my profile location is (unset|incomplete|unavailable)$`, func(mode string) { profileMode = mode })
+	sc.Step(`^the profile lookup is followed by an unrestricted search$`, func() error {
+		s := current()
+		if len(s.requests) != 2 || !strings.Contains(s.stdout.String(), "Searching everywhere") {
+			return fmt.Errorf("expected profile and unrestricted search")
+		}
+		<-s.requests
+		r := <-s.requests
+		if r.URL.Query().Get("search_latitude") != "" || r.URL.Query().Get("search_longitude") != "" {
+			return fmt.Errorf("unexpected location")
 		}
 		return nil
 	})

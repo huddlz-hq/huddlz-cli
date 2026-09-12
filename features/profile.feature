@@ -14,3 +14,25 @@ Feature: Profile search defaults
     When I search everywhere despite my profile
     Then the command succeeds
     And the profile is bypassed without a geographic restriction
+
+  Scenario Outline: Search clearly without a usable default
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    Given my profile location is <state>
+    When I search using my saved profile
+    Then the command succeeds
+    And the profile lookup is followed by an unrestricted search
+
+    Examples:
+      | state      |
+      | unset      |
+      | incomplete |
+
+  Scenario: A profile failure is not an absent preference
+    Given the authentication API accepts my credentials
+    When I log in with my password on stdin
+    Then the command succeeds
+    Given my profile location is unavailable
+    When I search using my saved profile
+    Then the command fails with "Could not read search defaults: HTTP 503"
