@@ -33,6 +33,10 @@ func search(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	if err := applyProfileDefaults(&options); err != nil {
+		fmt.Fprintln(stderr, "Could not read search defaults:", err)
+		return 1
+	}
 	params := url.Values{"date_filter": {options.date}, "search_time_zone": {options.timeZone}, "sort": {"starts_at"}, "page[limit]": {strconv.Itoa(options.limit)}, "page[offset]": {strconv.Itoa(options.offset)}}
 	if options.query != "" {
 		params.Set("query", options.query)

@@ -56,7 +56,7 @@ from the number of results. Invalid continuation links and responses exceeding
 the requested limit fail without printing successful results. Offset pagination
 is not a snapshot: changes to matching huddlz between requests can move results.
 
-Address lookup and profile-based defaults remain planned.
+Address lookup remains planned.
 
 ## Development
 
@@ -126,7 +126,7 @@ Planned additions (not implemented):
 
 | Command | Purpose |
 | --- | --- |
-| Address lookup and profile defaults | Choose search locations without coordinates |
+| Address lookup | Choose search locations without coordinates |
 
 Command conventions:
 
@@ -243,7 +243,8 @@ stored unencrypted in mode-0600 files beneath the OS user configuration director
 The file name is a hash of the server URL. New session directories use mode 0700;
 saves replace the token atomically. The OS keychain is not used in this version.
 Authentication requires HTTPS except for loopback development servers and does
-not follow redirects. Search and show continue to use anonymous public reads; RSVP uses the saved
+not follow redirects. The search result and show reads remain anonymous; profile defaults are read with
+the saved session. RSVP uses the saved
 session for the selected server.
 
 Use `huddlz auth logout` to remove the saved session for the selected server and
@@ -331,3 +332,8 @@ failure exits nonzero without claiming cancellation succeeded. When submission
 succeeded but verification did not, the diagnostic states that distinction. The
 CLI never automatically repeats the mutation. No new waitlist-join API is needed
 to leave an existing waitlist entry.
+
+Signed-in searches now fetch current home search defaults from `/api/json/profile`
+when no explicit coordinates or `--anywhere` are supplied. The returned coordinates,
+radius, and location timezone are used for that request; an explicit `--time-zone`
+continues to take precedence. No separate home-location copy is persisted locally.

@@ -35,6 +35,7 @@ Result timestamps retain the offsets returned by the server.
 
 type searchOptions struct {
 	jsonOutput                  bool
+	anywhere, timeZoneSet       bool
 	query, date, kind, timeZone string
 	limit, offset               int
 	location                    *searchLocation
@@ -48,11 +49,11 @@ type searchLocation struct {
 func parseSearchOptions(args []string) (searchOptions, error) {
 	var options searchOptions
 	var location searchLocation
-	var anywhere bool
+
 	flags := pflag.NewFlagSet("search", pflag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.BoolVar(&options.jsonOutput, "json", false, "Return JSON")
-	flags.BoolVar(&anywhere, "anywhere", false, "Search without a geographic restriction")
+	flags.BoolVar(&options.anywhere, "anywhere", false, "Search without a geographic restriction")
 	flags.Float64Var(&location.latitude, "lat", 0, "Search latitude")
 	flags.Float64Var(&location.longitude, "lng", 0, "Search longitude")
 	flags.IntVar(&location.radius, "radius", 25, "Search radius in miles")
@@ -68,8 +69,9 @@ func parseSearchOptions(args []string) (searchOptions, error) {
 		return options, fmt.Errorf("supply at most one nonempty query; quote multiword searches")
 	}
 	options.query = flags.Arg(0)
+	options.timeZoneSet = flags.Changed("time-zone")
 	latSet, lngSet := flags.Changed("lat"), flags.Changed("lng")
-	if anywhere && (latSet || lngSet || flags.Changed("radius")) {
+	if options.anywhere && (latSet || lngSet || flags.Changed("radius")) {
 		return options, fmt.Errorf("--anywhere cannot be combined with --lat, --lng, or --radius")
 	}
 	if latSet != lngSet {

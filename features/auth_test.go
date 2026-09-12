@@ -48,6 +48,12 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
+			case "/api/json/profile":
+				if r.Header.Get("Authorization") != "Bearer test-session-secret" {
+					w.WriteHeader(401)
+					return
+				}
+				fmt.Fprint(w, `{"search_defaults":{"home_location":{"label":"Austin","latitude":30.2672,"longitude":-97.7431,"time_zone":"America/Chicago"},"distance_miles":25}}`)
 			case "/api/auth/sign_in":
 				if redirectLogin {
 					w.Header().Set("Location", s.server.URL+"/redirect-destination")
@@ -93,6 +99,11 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
 			case "/api/json/huddlz":
 				q := r.URL.Query()
+				if q.Get("search_latitude") != "" {
+					fmt.Fprint(w, `{"data":[],"links":{"next":null}}`)
+					return
+				}
+
 				if cancellationMembership != "" && q.Get("filter[id][eq]") != "" {
 					if r.Header.Get("Authorization") != "Bearer test-session-secret" || r.Method != "GET" || q.Get("filter[id][eq]") != "11111111-1111-4111-8111-111111111111" || q.Get("date_filter") != "all" || (q.Get("relationship") != "attending" && q.Get("relationship") != "waitlisted") {
 						w.WriteHeader(400)
@@ -392,6 +403,30 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 			if r.Method != "GET" || r.URL.Query().Get("relationship") != status {
 				return fmt.Errorf("expected both membership checks")
 			}
+		}
+		return nil
+	})
+
+	sc.Step(`^I search using my saved profile$`, func() error {
+		s := current()
+		for len(s.requests) > 0 {
+			<-s.requests
+		}
+		return runCLI([]string{"search"}, "")
+	})
+	sc.Step(`^the search uses my current profile location$`, func() error {
+		s := current()
+		if len(s.requests) != 2 || !strings.Contains(s.stdout.String(), "within 25 miles of 30.2672, -97.7431") || !strings.Contains(s.stdout.String(), "America/Chicago") {
+			return fmt.Errorf("expected profile scope")
+		}
+		r := <-s.requests
+		if r.URL.Path != "/api/json/profile" {
+			return fmt.Errorf("expected profile read")
+		}
+		r = <-s.requests
+		q := r.URL.Query()
+		if q.Get("search_latitude") != "30.2672" || q.Get("search_longitude") != "-97.7431" || q.Get("distance_miles") != "25" || q.Get("search_time_zone") != "America/Chicago" {
+			return fmt.Errorf("incorrect profile search")
 		}
 		return nil
 	})
