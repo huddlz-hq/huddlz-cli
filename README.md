@@ -2,8 +2,46 @@
 
 A command-line client for humans and agents to discover huddlz and manage RSVPs.
 
-This is an early CLI with help, version, and public search. Credentials
-and profile preferences are not implemented yet.
+Search anonymously or sign in to use your profile defaults, inspect permitted
+details, and manage confirmed or waitlisted attendance.
+
+## Install or upgrade
+
+Download an archive and the checksums file from the
+[latest release](https://github.com/huddlz-hq/huddlz-cli/releases/latest).
+Choose `darwin` for macOS, `linux` for Linux, or `windows` for Windows;
+`arm64` is for Apple Silicon and other ARM64 machines, while `amd64` is for
+Intel/AMD 64-bit machines.
+
+On macOS or Linux, verify and extract the archive (replace the example filenames
+with your selected version and platform):
+
+```sh
+shasum -a 256 huddlz_v0.1.0_darwin_arm64.tar.gz
+# Compare with that filename's line in huddlz_v0.1.0_checksums.txt.
+tar -xzf huddlz_v0.1.0_darwin_arm64.tar.gz
+mkdir -p "$HOME/.local/bin"
+install -m 755 huddlz "$HOME/.local/bin/huddlz"
+export PATH="$HOME/.local/bin:$PATH"
+huddlz version
+```
+
+Add that PATH setting to your shell startup file if needed. On Windows, use
+PowerShell's `Get-FileHash <archive.zip> -Algorithm SHA256`, compare the checksum,
+then `Expand-Archive <archive.zip>`. Move `huddlz.exe` to a directory on your user
+PATH and run `huddlz version`. Upgrade by replacing the executable with a newer
+verified download; saved sessions remain in your user configuration directory.
+Binaries are currently unsigned; operating-system download protections may apply.
+
+To build from source, install the Go version declared in `go.mod` and run
+`go build -o huddlz ./cmd/huddlz`. Maintainers can run
+`scripts/release.sh v0.1.0` with Go, Bash, and Python 3 to build all six archives
+and SHA-256 checksums under `dist/`. Build outputs are repeatable with the same
+source, Go toolchain, and Python/zlib versions. Pushing a version tag runs the
+full CI matrix before publishing its release. Update `docs/release-notes.md`
+before tagging a new version.
+
+## Search
 
 ```sh
 huddlz search
