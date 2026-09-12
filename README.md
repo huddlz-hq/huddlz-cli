@@ -355,3 +355,12 @@ A rejected or unreadable saved session is a failure, never an anonymous retry.
 `show` requests the hosting group's name and slug and the caller-visible virtual
 link. Missing or protected details remain marked as undisclosed. The API owns
 visibility decisions; the CLI does not attempt alternate lookups.
+
+CI runs the executable scenarios, vet, and formatting checks on Linux, macOS,
+and Windows for every main push and pull request. Windows continuation-command
+tests use Git Bash; the CLI itself is a native executable. Tests isolate HOME,
+APPDATA, and XDG configuration from the developer's credentials.
+
+On Windows, sessions live beneath `%APPDATA%\\huddlz\\sessions` and inherit that
+user directory's Windows access controls; POSIX mode bits do not enforce Windows
+ACLs. Use a private OS profile directory, not a shared APPDATA override.

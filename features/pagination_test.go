@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -55,9 +56,16 @@ func registerPagination(sc *godog.ScenarioContext, current func() *searchScenari
 		program := binary
 		if shell {
 			program = "/bin/sh"
+			if runtime.GOOS == "windows" {
+				var err error
+				program, err = exec.LookPath("bash")
+				if err != nil {
+					return err
+				}
+			}
 		}
 		cmd := exec.CommandContext(ctx, program, args...)
-		cmd.Env = []string{"HUDDLZ_URL=" + state.server.URL, "HOME=" + home, "PATH=" + filepath.Dir(binary) + string(os.PathListSeparator) + os.Getenv("PATH")}
+		cmd.Env = append(testEnvironment(state.server.URL, home), "PATH="+filepath.Dir(binary)+string(os.PathListSeparator)+os.Getenv("PATH"))
 		cmd.Stdout, cmd.Stderr = &state.stdout, &state.stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("CLI failed: %v; stderr=%s", err, state.stderr.String())

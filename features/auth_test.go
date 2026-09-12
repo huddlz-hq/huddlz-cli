@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -242,7 +243,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		if serverOverride != "" {
 			server = serverOverride
 		}
-		cmd.Env = []string{"HUDDLZ_URL=" + server, "HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, "config"), "PATH=" + os.Getenv("PATH")}
+		cmd.Env = testEnvironment(server, home)
 		cmd.Stdin = strings.NewReader(input)
 		cmd.Stdout = &s.stdout
 		cmd.Stderr = &s.stderr
@@ -579,7 +580,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 			if strings.Contains(string(data), "test-password") {
 				return fmt.Errorf("password was persisted")
 			}
-			if string(data) != "test-session-secret" || info.Mode().Perm() != 0600 {
+			if string(data) != "test-session-secret" || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 				return fmt.Errorf("expected user-only token file")
 			}
 			count++

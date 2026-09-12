@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -77,7 +76,7 @@ func registerDetails(sc *godog.ScenarioContext, current func() *searchScenario, 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, binary, "show", "11111111-1111-4111-8111-111111111111")
-		cmd.Env = []string{"HUDDLZ_URL=" + s.server.URL, "HOME=" + home, "PATH=" + os.Getenv("PATH")}
+		cmd.Env = testEnvironment(s.server.URL, home)
 		cmd.Stdout, cmd.Stderr = &s.stdout, &s.stderr
 		err := cmd.Run()
 		var exitErr *exec.ExitError

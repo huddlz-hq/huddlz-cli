@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -55,7 +56,7 @@ func loadSession(server *url.URL) (string, error) {
 	if os.IsNotExist(err) {
 		return "", errNoSession
 	}
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 64<<10 {
+	if err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0) || info.Size() > 64<<10 {
 		return "", fmt.Errorf("session file must be a user-only regular file")
 	}
 	data, err := os.ReadFile(path)

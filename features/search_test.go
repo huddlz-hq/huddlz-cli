@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +24,11 @@ type searchScenario struct {
 }
 
 func TestFeatures(t *testing.T) {
-	binary := filepath.Join(t.TempDir(), "huddlz")
+	name := "huddlz"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	binary := filepath.Join(t.TempDir(), name)
 	build := exec.Command("go", "build", "-o", binary, "../cmd/huddlz")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, output)
@@ -100,7 +104,7 @@ func TestFeatures(t *testing.T) {
 				defer cancel()
 				cmd := exec.CommandContext(ctx, binary, append([]string{"search"}, args...)...)
 				// Isolate the subprocess from developer credentials and preferences.
-				cmd.Env = []string{"HUDDLZ_URL=" + state.server.URL, "HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
+				cmd.Env = testEnvironment(state.server.URL, t.TempDir())
 				cmd.Stdout, cmd.Stderr = &state.stdout, &state.stderr
 				err := cmd.Run()
 				if ctx.Err() != nil {
