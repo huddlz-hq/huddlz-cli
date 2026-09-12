@@ -30,6 +30,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 	var cancelMode string
 	var profileMode string
 	var waitlistState string
+	var rejectDiscovery bool
 	sc.Step(`^the authentication API accepts my credentials$`, func() error {
 		var err error
 		home, err = os.MkdirTemp(root, "account-")
@@ -49,6 +50,7 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		cancelMode = ""
 		profileMode = ""
 		waitlistState = "waitlisted"
+		rejectDiscovery = false
 		s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s.requests <- r.Clone(context.Background())
 			switch r.URL.Path {
@@ -59,6 +61,12 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 					return
 				}
 				fmt.Fprintf(w, `{"data":{"id":"11111111-1111-4111-8111-111111111111","type":"huddl","attributes":{"attendance_state":%q}}}`, waitlistState)
+			case "/api/json/huddlz/11111111-1111-4111-8111-111111111111":
+				if r.Header.Get("Authorization") != "Bearer test-session-secret" || r.URL.Query().Get("include") != "group" {
+					w.WriteHeader(401)
+					return
+				}
+				fmt.Fprint(w, `{"data":{"id":"11111111-1111-4111-8111-111111111111","type":"huddl","attributes":{"title":"Private games","description":"Members welcome","starts_at":"2027-01-10T18:00:00Z","ends_at":"2027-01-10T20:00:00Z","visible_virtual_link":"https://meet.example/room","attendance_state":"confirmed"},"relationships":{"group":{"data":{"id":"group-id","type":"group"}}}},"included":[{"id":"group-id","type":"group","attributes":{"name":"Games Club","slug":"games-club"}}]}`)
 			case "/api/json/profile":
 				if profileMode == "unavailable" {
 					w.WriteHeader(503)
@@ -117,6 +125,10 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 				}
 				fmt.Fprint(w, `{"data":{"type":"huddl","id":"11111111-1111-4111-8111-111111111111"}}`)
 			case "/api/json/huddlz":
+				if rejectDiscovery {
+					w.WriteHeader(401)
+					return
+				}
 				q := r.URL.Query()
 				if q.Get("search_latitude") != "" || q.Get("relationship") == "" {
 					fmt.Fprint(w, `{"data":[],"links":{"next":null}}`)
@@ -499,6 +511,29 @@ func registerAuth(sc *godog.ScenarioContext, current func() *searchScenario, bin
 		}
 		if !strings.HasPrefix(s.stdout.String(), want) || len(s.requests) != 1 {
 			return fmt.Errorf("expected backend state %s", state)
+		}
+		return nil
+	})
+
+	sc.Step(`^discovery rejects my saved session$`, func() { rejectDiscovery = true })
+	sc.Step(`^discovery sends my saved session$`, func() error {
+		s := current()
+		if len(s.requests) != 1 {
+			return fmt.Errorf("expected discovery request")
+		}
+		r := <-s.requests
+		if r.Header.Get("Authorization") != "Bearer test-session-secret" {
+			return fmt.Errorf("missing saved session")
+		}
+		return nil
+	})
+	sc.Step(`^I inspect a huddl using my saved session$`, func() error { return runCLI([]string{"show", "11111111-1111-4111-8111-111111111111"}, "") })
+	sc.Step(`^I see the disclosed virtual link and hosting group$`, func() error {
+		s := current()
+		for _, v := range []string{"https://meet.example/room", "Games Club", "games-club", "confirmed"} {
+			if !strings.Contains(s.stdout.String(), v) {
+				return fmt.Errorf("missing authorized detail %s", v)
+			}
 		}
 		return nil
 	})

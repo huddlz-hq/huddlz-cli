@@ -50,7 +50,7 @@ func search(args []string, stdout, stderr io.Writer) int {
 		params.Set("distance_miles", strconv.Itoa(location.radius))
 	}
 	endpoint.RawQuery = params.Encode()
-	body, err := getJSONAPI(endpoint)
+	body, err := discoveryGet(endpoint)
 	if err != nil {
 		var requestErr *url.Error
 		if errors.As(err, &requestErr) {

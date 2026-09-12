@@ -185,8 +185,8 @@ Timestamps retain the API's offsets. Missing optional details are marked as not
 disclosed; a missing attendance limit is shown as not specified.
 
 The current JSON:API detail schema does not expose RSVP counts or remaining seats.
-Virtual meeting links are undisclosed to this anonymous lookup (the API has a
-protected `visible_virtual_link` field for authorized users). The CLI identifies these limitations explicitly;
+Virtual meeting links are shown only when the API discloses its protected
+`visible_virtual_link` field to the current caller. The CLI identifies these limitations explicitly;
 a published state or attendance limit does not promise an available seat.
 
 A missing or inaccessible huddl produces the same “Huddl unavailable” diagnostic
@@ -243,8 +243,8 @@ stored unencrypted in mode-0600 files beneath the OS user configuration director
 The file name is a hash of the server URL. New session directories use mode 0700;
 saves replace the token atomically. The OS keychain is not used in this version.
 Authentication requires HTTPS except for loopback development servers and does
-not follow redirects. The search result and show reads remain anonymous; profile defaults are read with
-the saved session. RSVP uses the saved
+not follow redirects. Search and show use the saved session when present, as do profile defaults.
+RSVP uses the saved
 session for the selected server.
 
 Use `huddlz auth logout` to remove the saved session for the selected server and
@@ -348,3 +348,10 @@ silently switch a normal RSVP into a waitlist request.
 
 The newer API returns attendance state directly. For ordinary RSVP responses
 from older servers that omit it, the CLI retains its attending-only verification.
+
+
+Discovery uses a saved session when available and stays anonymous otherwise.
+A rejected or unreadable saved session is a failure, never an anonymous retry.
+`show` requests the hosting group's name and slug and the caller-visible virtual
+link. Missing or protected details remain marked as undisclosed. The API owns
+visibility decisions; the CLI does not attempt alternate lookups.

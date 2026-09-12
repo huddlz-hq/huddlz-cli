@@ -38,7 +38,7 @@ func registerDetails(sc *godog.ScenarioContext, current func() *searchScenario, 
 			return fmt.Errorf("expected one lookup, got %d", len(s.requests))
 		}
 		r := <-s.requests
-		if r.Method != "GET" || r.URL.Path != "/api/json/huddlz/11111111-1111-4111-8111-111111111111" || r.URL.RawQuery != "" {
+		if r.Method != "GET" || r.URL.Path != "/api/json/huddlz/11111111-1111-4111-8111-111111111111" || r.URL.Query().Get("include") != "group" {
 			return fmt.Errorf("unexpected lookup: %v", r)
 		}
 		return nil
@@ -99,7 +99,7 @@ func registerDetails(sc *godog.ScenarioContext, current func() *searchScenario, 
 		}
 		select {
 		case r := <-s.requests:
-			if r.Method != "GET" || r.URL.Path != "/api/json/huddlz/11111111-1111-4111-8111-111111111111" || r.URL.RawQuery != "" || r.Header.Get("Authorization") != "" || r.Header.Get("Accept") != "application/vnd.api+json" {
+			if r.Method != "GET" || r.URL.Path != "/api/json/huddlz/11111111-1111-4111-8111-111111111111" || r.URL.Query().Get("include") != "group" || r.Header.Get("Authorization") != "" || r.Header.Get("Accept") != "application/vnd.api+json" {
 				return fmt.Errorf("unexpected request: %v", r)
 			}
 		default:
