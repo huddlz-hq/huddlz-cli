@@ -98,7 +98,7 @@ Address lookup remains planned.
 
 ## Development
 
-Requires Go 1.26 or later. The CLI uses pflag for option parsing and Godog for
+Requires Go 1.27.2 or later. The CLI uses pflag for option parsing and Godog for
 acceptance tests. Canonical IANA timezone names are bundled in the executable;
 calendar calculations remain on the server. The name list matches IANA tzdata
 2026c and can be refreshed with `sh scripts/update-timezones.sh <release>` when
