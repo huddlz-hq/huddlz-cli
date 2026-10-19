@@ -1,0 +1,53 @@
+name: Dependency maintenance validation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Resolve current stable dependencies
+        run: |
+          go get -u -t ./...
+          go mod tidy
+          go list -m -u all > dependency-tree.txt
+          git diff --stat
+          echo DEPENDENCY_MOD_START
+          base64 go.mod
+          echo DEPENDENCY_MOD_END
+          echo DEPENDENCY_SUM_START
+          base64 go.sum
+          echo DEPENDENCY_SUM_END
+      - name: Verify dependencies and behavior
+        run: |
+          go mod verify
+          test -z "$(gofmt -l cmd internal features)"
+          go vet ./...
+          go test ./... -count=1
+          go build -o "$RUNNER_TEMP/huddlz" ./cmd/huddlz
+      - name: Audit dependencies
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      - name: Save canonical module resolution
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: canonical-dependency-resolution
+          path: |
+            go.mod
+            go.sum
+            dependency-tree.txt
+          retention-days: 7
