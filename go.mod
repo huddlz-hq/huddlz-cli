@@ -1,11 +1,11 @@
 module github.com/huddlz-hq/huddlz-cli
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/cucumber/godog v0.16.0
 	github.com/spf13/pflag v1.1.0
-	golang.org/x/term v0.47.0
+	golang.org/x/term v0.48.0
 )
 
 require (
