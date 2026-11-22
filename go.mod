@@ -1,11 +1,11 @@
 module github.com/huddlz-hq/huddlz-cli
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/cucumber/godog v0.16.0
-	github.com/spf13/pflag v1.0.10
-	golang.org/x/term v0.47.0
+	github.com/spf13/pflag v1.1.0
+	golang.org/x/term v0.48.0
 )
 
 require (
@@ -17,5 +17,6 @@ require (
 	github.com/hashicorp/go-uuid v1.0.4 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 )
